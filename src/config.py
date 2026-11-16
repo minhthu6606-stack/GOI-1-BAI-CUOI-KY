@@ -30,6 +30,15 @@ SSI_MAX_DAYS_PER_REQUEST = 365   # endpoint ohlc: chia khoảng thời gian dài
 # nên chia đoạn 120 ngày: tối đa ~86 phiên/đoạn, luôn nằm gọn trong 1 trang 100 bản ghi.
 SSI_SUMMARY_MAX_DAYS = 120
 
+# ----- Cập nhật dữ liệu -----
+DEFAULT_SYMBOLS = ["FPT", "HPG", "VCB", "MBB", "SSI", "MWG"]  # các mã của danh mục minh họa
+MARKET_INDEX = "VNINDEX"         # chỉ số thị trường: dùng làm lịch giao dịch chuẩn và để tính beta
+HISTORY_YEARS = 3                # độ dài lịch sử tải lần đầu
+OVERLAP_DAYS = 14                # mỗi lần cập nhật tải lại 14 ngày gần nhất để phát hiện giá lịch sử bị điều chỉnh
+PRICE_ADJUST_TOLERANCE = 0.001   # lệch > 0,1% giữa giá đã lưu và giá mới tải => SSI đã điều chỉnh lại lịch sử
+BOARDS = ("HOSE", "HNX", "UPCOM")
+SECURITIES_MAX_AGE_DAYS = 7      # danh sách mã (ngành, số cổ phiếu niêm yết) làm mới mỗi tuần
+
 # Định dạng ngày SSI chấp nhận - dò bằng scripts/check_ssi_connection.py ngày 16/11/2026
 SSI_DATE_FORMAT_SUMMARY = "%Y/%m/%d"           # endpoint securitiesSummary, indexSummary
 SSI_DATE_FORMAT_OHLC = "%Y/%m/%d %H:%M:%S"     # endpoint ohlc

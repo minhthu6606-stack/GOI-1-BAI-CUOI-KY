@@ -5,8 +5,8 @@
 
 # ===== Dữ liệu tải về, nhật ký =====
 # (data_sample/ vẫn được đưa lên để người chấm chạy thử)
-data/
-logs/
+/data/
+/logs/
 *.log
 
 # ===== Python =====

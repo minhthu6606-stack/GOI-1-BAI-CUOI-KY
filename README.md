@@ -7,8 +7,9 @@ Nguồn dữ liệu: SSI FastConnect API v3, chỉ sử dụng quyền đọc d�
 > Đây là công cụ phân tích học thuật, không phải khuyến nghị đầu tư.
 
 ## Trạng thái
-Đã có: lớp gọi API SSI, chuẩn hóa và kiểm tra chất lượng dữ liệu, kho SQLite, script cập nhật dữ liệu, kiểm thử tự động.
-Đang làm: lớp tính toán tài chính, ứng dụng Streamlit.
+Đã có: lớp gọi API SSI, chuẩn hóa và kiểm tra chất lượng dữ liệu, kho SQLite, script cập nhật dữ liệu,
+lớp tính toán tài chính (tập trung, thanh khoản, rủi ro thị trường, kịch bản giảm sàn), kiểm thử tự động.
+Đang làm: ứng dụng Streamlit.
 
 ## Cài đặt (Windows, PowerShell)
     python -m venv .venv
@@ -20,6 +21,8 @@ Nguồn dữ liệu: SSI FastConnect API v3, chỉ sử dụng quyền đọc d�
     python scripts\update_data.py            # tải/cập nhật dữ liệu danh mục minh họa vào data/portfolio.db
     python scripts\update_data.py --symbols FPT ACB   # tải/cập nhật các mã chỉ định
     python scripts\update_data.py --status   # xem kho đang có gì và nhật ký cập nhật, không tải
+    python scripts\make_demo_portfolio.py    # tạo danh mục minh họa data_sample\demo_portfolio.csv theo giá mới nhất
+    python scripts\portfolio_report.py       # in báo cáo sức khỏe danh mục ra màn hình
     python scripts\check_ssi_connection.py   # kiểm tra kết nối và định dạng dữ liệu SSI
     python scripts\try_fetch.py              # tải thử 3 năm dữ liệu FPT, VN-Index và báo cáo chất lượng
     python -m pytest                         # chạy kiểm thử tự động (không cần mạng, không cần key)
@@ -33,6 +36,13 @@ Lần đầu `update_data.py` tải đủ 3 năm; các lần sau chỉ tải ph�
     src/data/normalize.py    chuẩn hóa dữ liệu và kiểm tra chất lượng
     src/data/storage.py      kho SQLite: dữ liệu theo phiên, danh sách mã, response thô, nhật ký cập nhật
     src/data/updater.py      tải lần đầu, cập nhật phần mới, phát hiện giá lịch sử bị điều chỉnh
+    src/finance/portfolio.py      đọc, kiểm tra và định giá danh mục
+    src/finance/market_data.py    đọc dữ liệu thị trường từ kho cho lớp tài chính
+    src/finance/concentration.py  mức tập trung theo mã và ngành (HHI, số mã hiệu dụng, quy tắc 5/10/40)
+    src/finance/liquidity.py      thanh khoản: số ngày bán hết và có tiền (SEC Rule 22e-4, T+2)
+    src/finance/risk.py           biến động, beta, VaR lịch sử, mức sụt giảm tối đa
+    src/finance/stress.py         kịch bản mọi mã giảm sàn (biên độ, bước giá)
+    src/finance/health.py         tổng hợp báo cáo sức khỏe, ngưỡng và lời giải thích
     tests/                   kiểm thử tự động
     scripts/                 các script chạy thủ công
 

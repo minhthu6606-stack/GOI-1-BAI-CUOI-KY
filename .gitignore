@@ -1,27 +1,20 @@
-# ===== Thông tin bí mật =====
+# Thông tin bí mật
 .env
-.envrc
 .streamlit/secrets.toml
 
-# ===== Dữ liệu tải về, nhật ký =====
-# (data_sample/ vẫn được đưa lên để người chấm chạy thử)
+# Dữ liệu tải về, nhật ký (data_sample/ vẫn được đưa lên để người chấm chạy thử)
 /data/
 /logs/
 *.log
 
-# ===== Python =====
+# Python
 __pycache__/
-*.py[codz]
+*.pyc
 .venv/
 venv/
-env/
 .pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.ipynb_checkpoints/
-tempCodeRunnerFile.py
 
-# ===== Hệ điều hành / trình soạn thảo =====
+# Hệ điều hành / trình soạn thảo
 .DS_Store
 Thumbs.db
 .vscode/

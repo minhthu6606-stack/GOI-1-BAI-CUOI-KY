@@ -156,3 +156,14 @@ def test_floor_scenario_multi_session():
     # 60.000 -> 55.800 -> 55.800 × 0,93 = 51.894 -> làm tròn lên bước 100 = 51.900
     assert table.loc[0, "stressed_price"] == 51_900
     assert summary["total_loss"] == pytest.approx((60_000 - 51_900) * 100)
+
+
+def test_r_squared_matches_beta_formula():
+    rng = np.random.default_rng(1)
+    market = pd.Series(rng.normal(0, 0.01, 300))
+    asset = 0.7 * market + pd.Series(rng.normal(0, 0.01, 300))
+    r2 = risk.r_squared(asset, market, window=300)
+    # R² = β²σ²_m / σ²_tài sản
+    expected = risk.beta(asset, market, window=300) ** 2 * market.var() / asset.var()
+    assert r2 == pytest.approx(expected)
+    assert risk.r_squared(market * 2, market) == pytest.approx(1.0)

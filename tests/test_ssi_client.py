@@ -108,3 +108,10 @@ def test_stock_daily_uses_short_chunks_without_paging():
     assert len(session.get_calls) == 4
     assert all(call["params"]["pageNumber"] == 1 for call in session.get_calls)
     assert session.get_calls[1]["params"]["from"] == "2026/05/01"
+
+
+def test_check_connection_reauthenticates():
+    client, session = make_client([])
+    client.check_connection()
+    client.check_connection()
+    assert session.post_calls == 2   # mỗi lần kiểm tra đều xác thực lại thật sự

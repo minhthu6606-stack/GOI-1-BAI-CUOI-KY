@@ -1,4 +1,4 @@
-# [Tên sản phẩm – sẽ cập nhật]
+# Khám Sức Khỏe Danh Mục
 
 Đồ án cá nhân cuối kỳ – Gói phần mềm ứng dụng cho tài chính 1 (UEL).
 Sản phẩm: công cụ kiểm tra sức khỏe danh mục cổ phiếu cho nhà đầu tư cá nhân.
@@ -8,8 +8,17 @@ Nguồn dữ liệu: SSI FastConnect API v3, chỉ sử dụng quyền đọc d�
 
 ## Trạng thái
 Đã có: lớp gọi API SSI, chuẩn hóa và kiểm tra chất lượng dữ liệu, kho SQLite, script cập nhật dữ liệu,
-lớp tính toán tài chính (tập trung, thanh khoản, rủi ro thị trường, kịch bản giảm sàn), kiểm thử tự động.
-Đang làm: ứng dụng Streamlit.
+lớp tính toán tài chính (tập trung, thanh khoản, rủi ro thị trường, kịch bản giảm sàn), ứng dụng Streamlit,
+kiểm thử tự động. Đang làm: kiểm định VaR ngoài mẫu và hoàn thiện tài liệu.
+
+## Chạy nhanh KHÔNG cần API key (dành cho người chấm)
+    python -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+    python -m pip install -r requirements.txt
+    streamlit run src\app\main.py
+
+Ở thanh bên trái, chọn **Dữ liệu mẫu (không cần API key)**. Dữ liệu mẫu (`data_sample/sample.db`) là dữ liệu THẬT
+tải từ SSI và chốt ở một ngày; giao diện ghi rõ ngày chốt.
 
 ## Cài đặt (Windows, PowerShell)
     python -m venv .venv
@@ -17,12 +26,14 @@ lớp tính toán tài chính (tập trung, thanh khoản, rủi ro thị trư�
     python -m pip install -r requirements.txt
     Copy-Item .env.example .env   # rồi điền SSI_API_KEY, SSI_API_SECRET của bạn
 
-## Các lệnh hiện có
+## Chạy với dữ liệu trực tiếp từ SSI
     python scripts\update_data.py            # tải/cập nhật dữ liệu danh mục minh họa vào data/portfolio.db
     python scripts\update_data.py --symbols FPT ACB   # tải/cập nhật các mã chỉ định
     python scripts\update_data.py --status   # xem kho đang có gì và nhật ký cập nhật, không tải
     python scripts\make_demo_portfolio.py    # tạo danh mục minh họa data_sample\demo_portfolio.csv theo giá mới nhất
     python scripts\portfolio_report.py       # in báo cáo sức khỏe danh mục ra màn hình
+    python scripts\export_sample.py          # xuất dữ liệu mẫu data_sample\sample.db cho người chấm
+    streamlit run src\app\main.py            # mở ứng dụng (chọn "Dữ liệu trực tiếp (SSI)")
     python scripts\check_ssi_connection.py   # kiểm tra kết nối và định dạng dữ liệu SSI
     python scripts\try_fetch.py              # tải thử 3 năm dữ liệu FPT, VN-Index và báo cáo chất lượng
     python -m pytest                         # chạy kiểm thử tự động (không cần mạng, không cần key)
@@ -43,6 +54,8 @@ Lần đầu `update_data.py` tải đủ 3 năm; các lần sau chỉ tải ph�
     src/finance/risk.py           biến động, beta, VaR lịch sử, mức sụt giảm tối đa
     src/finance/stress.py         kịch bản mọi mã giảm sàn (biên độ, bước giá)
     src/finance/health.py         tổng hợp báo cáo sức khỏe, ngưỡng và lời giải thích
+    src/app/main.py               ứng dụng Streamlit (giao diện)
+    src/app/charts.py             các biểu đồ Plotly
     tests/                   kiểm thử tự động
     scripts/                 các script chạy thủ công
 

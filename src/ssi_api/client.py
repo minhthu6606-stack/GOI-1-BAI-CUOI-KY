@@ -178,6 +178,11 @@ class SSIClient:
 
     # ------------------------------------------------------------------ dùng bên ngoài
 
+    def check_connection(self) -> None:
+        """Thử xác thực với SSI để kiểm tra trạng thái kết nối. Ném SSIError nếu không kết nối được."""
+        self._token = None
+        self._authenticate()
+
     def get_securities(self, board: str) -> list[dict[str, Any]]:
         """Danh sách chứng khoán trên một sàn (HOSE / HNX / UPCOM), kèm ngành và số cổ phiếu niêm yết."""
         body = self._get("data/securitiesByBoard", {"board": board})

@@ -17,6 +17,7 @@ Thước đo:
 
 Tài liệu:
     Jorion, P. (2007). Value at risk: The new benchmark for managing financial risk (3rd ed.). McGraw-Hill.
+    Sharpe, W. F. (1963). A simplified model for portfolio analysis. Management Science, 9(2), 277–293.
     Sharpe, W. F. (1964). Capital asset prices: A theory of market equilibrium under conditions of risk.
         The Journal of Finance, 19(3), 425–442.
 """
@@ -64,6 +65,20 @@ def beta(asset_returns: pd.Series, market_returns: pd.Series, window: int = BETA
     if market_var == 0:
         return float("nan")
     return float(joined.iloc[:, 0].cov(joined.iloc[:, 1]) / market_var)
+
+
+def r_squared(asset_returns: pd.Series, market_returns: pd.Series, window: int = BETA_WINDOW) -> float:
+    """Tỷ lệ phương sai của tài sản được giải thích bởi thị trường (R² của mô hình chỉ số đơn).
+
+    Theo mô hình chỉ số đơn (Sharpe, 1963): σ²_danh mục = β²σ²_thị trường + σ²_riêng.
+    R² = β²σ²_thị trường / σ²_danh mục = bình phương hệ số tương quan. Phần (1 − R²) là rủi ro
+    riêng của từng mã - phần có thể giảm bằng đa dạng hóa.
+    """
+    joined = pd.concat([asset_returns, market_returns], axis=1, join="inner").dropna().tail(window)
+    if len(joined) < 20:
+        return float("nan")
+    correlation = joined.iloc[:, 0].corr(joined.iloc[:, 1])
+    return float(correlation ** 2)
 
 
 def historical_var(returns: pd.Series, confidence: float = VAR_CONFIDENCE, window: int = VAR_WINDOW) -> float:

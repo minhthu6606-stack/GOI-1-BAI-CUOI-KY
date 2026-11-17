@@ -68,6 +68,22 @@ def num(value: float, digits: int = 2) -> str:
     return f"{value:.{digits}f}".replace(".", ",")
 
 
+def vnd_short(value: float) -> str:
+    """Định dạng tiền rút gọn cho ô chỉ số, vd 500000000 -> '500,0 tr đ', 1250000000 -> '1,25 tỷ đ'."""
+    if value is None or value != value:
+        return "không đủ dữ liệu"
+    if abs(value) >= 1e9:
+        return f"{_vn_number(value / 1e9, 2)} tỷ đ"
+    if abs(value) >= 1e6:
+        return f"{_vn_number(value / 1e6, 1)} tr đ"
+    return vnd(value)
+
+
+def _vn_number(value: float, digits: int) -> str:
+    """Số kiểu Việt Nam: dấu chấm phân cách nghìn, dấu phẩy thập phân (vd 8540.89 -> '8.540,89')."""
+    return f"{value:,.{digits}f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+
 def vnd(value: float) -> str:
     """Định dạng tiền kiểu Việt Nam, vd 1234567 -> '1.234.567 đ'."""
     if value is None or value != value:
@@ -105,6 +121,7 @@ def build_health_report(portfolio: Portfolio, market: MarketData,
         "volatility": risk.annualized_volatility(last_year),
         "market_volatility": risk.annualized_volatility(market_ret.tail(risk.TRADING_DAYS_PER_YEAR)),
         "beta": risk.beta(port_ret, market_ret),
+        "r_squared": risk.r_squared(port_ret, market_ret),
         "var_pct": risk.historical_var(port_ret),
         "max_drawdown_1y": risk.max_drawdown(last_year),
         "return_sessions": int(len(port_ret)),
@@ -192,6 +209,15 @@ def _add_checks(report: HealthReport, ucits: dict, n_eff: float, sectors: pd.Ser
          if b == b else "Không đủ dữ liệu."),
         "Sharpe (1964)",
     ))
+    r2 = m["r_squared"]
+    add(Check(
+        "Rủi ro thị trường", "Phần rủi ro đến từ thị trường chung (R²)", pct(r2, 0),
+        INFO if r2 != r2 else (WARNING if r2 < 0.5 else GOOD), "≥ 50%: rủi ro chủ yếu đến từ thị trường",
+        (f"Khoảng {pct(r2, 0)} biến động của danh mục đến từ thị trường chung; {pct(1 - r2, 0)} còn lại là rủi ro "
+         "riêng của từng mã. Rủi ro riêng có thể giảm bằng cách đa dạng hóa, rủi ro thị trường thì không."
+         if r2 == r2 else "Không đủ dữ liệu."),
+        "Mô hình chỉ số đơn - Sharpe (1963)",
+    ))
     add(Check(
         "Rủi ro thị trường", "VaR lịch sử 1 ngày, độ tin cậy 95%",
         f"{pct(m['var_pct'])} ≈ {vnd(m['var_amount'])}", INFO, "Kiểm định ngoài mẫu ở phần Kiểm chứng",
@@ -219,10 +245,14 @@ def _add_checks(report: HealthReport, ucits: dict, n_eff: float, sectors: pd.Ser
         held = [s for s in report.valuation["symbol"] if s in room_ratio.index]
         if held:
             lowest = room_ratio[held].sort_values()
+            full = [s for s, v in lowest.items() if v <= 0]
+            explanation = ("Tỷ lệ room còn lại / tổng room của từng mã: "
+                           + ", ".join(f"{s} {pct(float(v))}" for s, v in lowest.items()) + ".")
+            if full:
+                explanation += (f" {', '.join(full)} đã hết room: nhà đầu tư nước ngoài chỉ mua được khi có nhà đầu tư "
+                                "nước ngoài khác bán ra, nên nhu cầu mua từ khối ngoại bị giới hạn.")
             add(Check(
                 "Khối ngoại", "Room ngoại còn lại thấp nhất", f"{lowest.index[0]}: {pct(float(lowest.iloc[0]))}", INFO,
-                "Hết room: nhà đầu tư nước ngoài không mua thêm được",
-                "Tỷ lệ room còn lại / tổng room của từng mã: "
-                + ", ".join(f"{s} {pct(float(v))}" for s, v in lowest.items()) + ".",
+                "Hết room: nhà đầu tư nước ngoài không mua thêm được", explanation,
                 "Dữ liệu remainForeignRoom, totalForeignRoom của SSI",
             ))

@@ -8,12 +8,20 @@ from __future__ import annotations
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+# ----- Sản phẩm -----
+APP_NAME = "Khám Sức Khỏe Danh Mục"
+APP_GOAL = ("Chẩn đoán rủi ro của danh mục cổ phiếu: tập trung, thanh khoản, biến động, "
+            "kịch bản giảm sàn - kèm giải thích dễ hiểu")
+APP_USERS = "Nhà đầu tư cá nhân mới, nắm khoảng 3–10 mã cổ phiếu niêm yết tại Việt Nam"
+
 # ----- Đường dẫn -----
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data"            # dữ liệu tải về (không đưa lên GitHub)
 LOG_DIR = PROJECT_ROOT / "logs"             # nhật ký chạy chương trình (không đưa lên GitHub)
 SAMPLE_DIR = PROJECT_ROOT / "data_sample"   # dữ liệu mẫu cho người chấm (có đưa lên GitHub)
 DB_PATH = DATA_DIR / "portfolio.db"         # kho SQLite
+SAMPLE_DB_PATH = SAMPLE_DIR / "sample.db"   # bản sao dữ liệu thật dùng cho chế độ dữ liệu mẫu
+DEMO_PORTFOLIO_PATH = SAMPLE_DIR / "demo_portfolio.csv"
 
 # ----- Múi giờ: mọi dấu thời gian lưu và hiển thị theo giờ Việt Nam (yêu cầu Mục 4 của đề) -----
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")

@@ -66,3 +66,16 @@ def test_formatters():
     assert pct(0.1234) == "12,3%"
     assert vnd(1234567) == "1.234.567 đ"
     assert pct(float("nan")) == "không đủ dữ liệu"
+
+
+def test_vnd_short():
+    from src.finance.health import vnd_short
+    assert vnd_short(500_000_000) == "500,0 tr đ"
+    assert vnd_short(1_250_000_000) == "1,25 tỷ đ"
+    assert vnd_short(-52_415_000) == "-52,4 tr đ"
+    assert vnd_short(950_000) == "950.000 đ"
+
+
+def test_vnd_short_thousands():
+    from src.finance.health import vnd_short
+    assert vnd_short(8_540_894_758_680) == "8.540,89 tỷ đ"

@@ -2,12 +2,13 @@
 Nội dung từng trang của ứng dụng. Mỗi hàm nhận AppContext (đã tính sẵn ở main.py) và vẽ một trang.
 
 Thứ tự trang trên thanh điều hướng:
-    Danh mục:            Tổng quan · Nhập danh mục
-    Phân tích:           Cảnh báo · Phân bổ · Rủi ro · Thanh khoản & giảm sàn
+    Bắt đầu:              Trang chủ · Nhập danh mục
+    Kết quả kiểm tra:     Tổng quan · Cảnh báo · Phân bổ · Rủi ro · Thanh khoản & giảm sàn
     Thị trường & dữ liệu: Thị trường · Phương pháp & dữ liệu
 """
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -16,6 +17,7 @@ import streamlit as st
 
 from src import config
 from src.app import charts
+from src.app.style import HERO_ART
 from src.app.ui import (
     DATASET_LABELS, ICONS, KIND_LABELS, MODE_LABELS, RESULT_LABELS, STATUS_BADGE, format_date, format_time,
 )
@@ -69,13 +71,26 @@ def plot(fig) -> None:
     st.plotly_chart(fig, width="stretch", config=charts.PLOTLY_CONFIG)
 
 
+def chart_card(fig, note: str, column=None) -> None:
+    """Biểu đồ đặt trong một thẻ, kèm dòng "Cách đọc" ngay bên dưới."""
+    target = column if column is not None else st
+    with target.container(key=card_key(note[:60]), height="stretch"):
+        plot(fig)
+        how_to_read(note)
+
+
 def find_check(report: HealthReport, name_start: str) -> Check | None:
     return next((c for c in report.checks if c.name.startswith(name_start)), None)
 
 
+def card_key(text: str) -> str:
+    """Khóa của thẻ (CSS tạo kiểu cho mọi container có khóa bắt đầu bằng "card")."""
+    return "card_" + hashlib.md5(text.encode("utf-8")).hexdigest()[:10]
+
+
 def kpi_card(column, label: str, value: str, note: str, status: str | None = None, delta: str | None = None) -> None:
     """Một ô chỉ số: tên, con số, nhãn mức và một dòng giải thích. Các ô cùng hàng cao bằng nhau."""
-    with column.container(border=True, height="stretch"):
+    with column.container(key=card_key(label), height="stretch"):
         st.markdown(f"**{label}**")
         st.metric(label, value, delta=delta, label_visibility="collapsed")
         st.markdown((f"{badge(status)} &nbsp; " if status else "") + f":gray[{note}]")
@@ -101,17 +116,73 @@ def show_missing_symbols(ctx: AppContext) -> None:
                    f"tính. {hint}")
 
 
+# ====================================================================== Trang chủ
+
+FEATURES = [  # (tên biểu tượng Material Symbols, tiêu đề, câu hỏi)
+    ("pie_chart", "Mức tập trung", "Có đang dồn quá nhiều tiền vào một mã hay một ngành không?"),
+    ("water_drop", "Thanh khoản", "Cần tiền gấp thì mất mấy ngày mới bán hết danh mục?"),
+    ("monitoring", "Rủi ro thị trường", "Danh mục lên xuống mạnh đến đâu so với VN-Index?"),
+    ("trending_down", "Kịch bản xấu", "Nếu cả thị trường giảm sàn, bạn mất bao nhiêu tiền?"),
+]
+STEPS = [
+    ("Nhập danh mục", "Gõ mã, số lượng, giá vốn và tiền mặt, hoặc tải file CSV."),
+    ("Xem kết luận", "Trang Tổng quan cho biết danh mục Khỏe, Cần theo dõi hay Cần xem lại."),
+    ("Đọc giải thích", "Mỗi cảnh báo có con số, ý nghĩa, ngưỡng có nguồn và gợi ý nên làm gì."),
+]
+
+
+def home(ctx: AppContext) -> None:
+    with st.container(key="hero"):
+        left, right = st.columns([1.15, 1], vertical_alignment="center", gap="large")
+        with left:
+            st.html(
+                f'<div class="hero-kicker">{config.APP_NAME}</div>'
+                '<div class="hero-title">Danh mục của bạn<br>có đang <span class="glow">khỏe</span>?</div>'
+                f'<div class="hero-sub">{config.APP_GOAL}.</div>'
+                '<div class="chips"><span class="chip">Dữ liệu thật từ <b>SSI FastConnect</b></span>'
+                '<span class="chip">Ngưỡng có nguồn học thuật</span>'
+                '<span class="chip">Không đặt lệnh, không đọc tài khoản</span></div>'
+            )
+            b1, b2 = st.columns(2)
+            if b1.button("Xem kết quả kiểm tra", type="primary", icon=ICONS["overview"], width="stretch"):
+                st.switch_page(ctx.pages["overview"])
+            if b2.button("Nhập danh mục của bạn", icon=ICONS["portfolio"], width="stretch"):
+                st.switch_page(ctx.pages["portfolio"])
+        with right:
+            st.image(HERO_ART, width="stretch")
+
+    st.html('<div class="section-title">Ứng dụng kiểm tra <span class="glow">4 điều</span> cho danh mục của bạn</div>')
+    for number, (column, (icon, title, text)) in enumerate(zip(st.columns(4), FEATURES)):
+        with column.container(key=card_key("feature" + title), height="stretch"):
+            st.html(f'<div class="feature-icon{" gold" if number % 2 else ""}"><span class="ms">{icon}</span></div>')
+            st.markdown(f"**{title}**")
+            st.caption(text)
+
+    st.html('<div class="section-title">Dùng trong <span class="glow">3 bước</span></div>')
+    for number, (column, (title, text)) in enumerate(zip(st.columns(3), STEPS), 1):
+        with column.container(key=card_key("step" + title), height="stretch"):
+            st.html(f'<span class="step-no">{number}</span><b>{title}</b>')
+            st.caption(text)
+
+    st.html('<div class="section-title">Về sản phẩm</div>')
+    who, data = st.columns(2)
+    with who.container(key=card_key("who"), height="stretch"):
+        st.markdown(f"**:violet[:material/group:] Dành cho ai?**  \n{config.APP_USERS}.")
+    with data.container(key=card_key("data"), height="stretch"):
+        session = format_date(ctx.market.last_trading_date) if ctx.market else "chưa có"
+        source = "kho dữ liệu trên máy" if ctx.live else "bản dữ liệu SSI lưu kèm mã nguồn"
+        st.markdown(f"**:violet[:material/database:] Dữ liệu từ đâu?**  \nSSI FastConnect API, dữ liệu theo phiên. "
+                    f"Đang dùng {source}, phiên mới nhất **{session}**.")
+    st.caption(f":material/gavel: {DISCLAIMER}")
+
+
 # ====================================================================== Tổng quan
 
 def overview(ctx: AppContext) -> None:
-    st.title(config.APP_NAME)
-    st.markdown(f"##### {config.APP_TAGLINE}")
-    left, right = st.columns(2)
-    left.markdown(f"**Ứng dụng làm gì?** {config.APP_GOAL}.")
-    right.markdown(f"**Dành cho ai?** {config.APP_USERS}.")
+    page_header("Tổng quan", "Kết luận sức khỏe danh mục và 6 chỉ số chính. Bấm vào từng mục ở menu bên trái "
+                             "để xem chi tiết.")
     st.caption(f":material/gavel: {DISCLAIMER} Ứng dụng chỉ đọc dữ liệu thị trường từ SSI FastConnect API, "
                "không đặt lệnh và không đọc tài khoản chứng khoán của bạn.")
-
     if not ctx.live and ctx.market is not None:
         st.info(f"Máy này chưa có kho dữ liệu riêng nên ứng dụng dùng **bản dữ liệu SSI lưu kèm mã nguồn**, chốt "
                 f"đến phiên **{format_date(ctx.market.last_trading_date)}**. "
@@ -127,7 +198,8 @@ def overview(ctx: AppContext) -> None:
     level, label, sentence = overall_verdict(report.checks)
     counts = count_by_status(report.checks)
     color, icon = STATUS_BADGE[level]
-    with st.container(border=True):
+    level_code = {DANGER: "danger", WARNING: "warning", GOOD: "good"}[level]
+    with st.container(key=f"verdict-{level_code}"):
         head, detail = st.columns([1, 2], vertical_alignment="center")
         with head:
             st.caption(f"Kết luận sức khỏe danh mục · phiên {format_date(ctx.market.last_trading_date)}")
@@ -171,7 +243,7 @@ def overview(ctx: AppContext) -> None:
     for column, key, text in zip(links, ["allocation", "risk", "liquidity", "market"],
                                  ["Phân bổ theo mã và ngành", "Biến động và sụt giảm", "Bán gấp và giảm sàn",
                                   "Bối cảnh thị trường"]):
-        with column.container(border=True):
+        with column.container(key=card_key("link" + key)):
             st.page_link(ctx.pages[key], label=text, icon=ICONS[key])
 
 
@@ -252,7 +324,7 @@ def alerts(ctx: AppContext) -> None:
         for start in range(0, len(items), 2):
             columns = st.columns(2)
             for column, check in zip(columns, items[start:start + 2]):
-                with column.container(border=True, height="stretch"):
+                with column.container(key=card_key("alert" + check.name), height="stretch"):
                     st.markdown(f"**{check.name}** &nbsp; {badge(check.status)}")
                     st.markdown(f"#### {check.value}")
                     st.markdown(check.explanation)
@@ -268,12 +340,19 @@ def allocation(ctx: AppContext) -> None:
     if not require_report(ctx):
         return
     report, totals = ctx.report, ctx.report.totals
-    col1, col2 = st.columns(2)
-    with col1:
+    diversity = find_check(report, "Mức đa dạng hóa")
+    n_eff = float(diversity.value.split()[0].replace(",", ".")) if diversity and diversity.status != INFO else float("nan")
+    col1, col2 = st.columns([1, 2])
+    with col1.container(key=card_key("gauge"), height="stretch"):
+        if n_eff == n_eff:
+            plot(charts.diversity_gauge(n_eff))
+        how_to_read("kim chỉ số mã hiệu dụng. Vùng đỏ dưới 5 mã: tập trung cao; vùng vàng 5–10 mã; vùng xanh từ 10 mã: "
+                    "đa dạng hóa tốt (Evans & Archer, 1968).")
+    with col2.container(key=card_key("weights"), height="stretch"):
         plot(charts.weights_bar(report.valuation, totals["cash_weight"], totals["cash"]))
-        how_to_read("mỗi thanh là phần trăm tổng tài sản. Vạch chấm 10% là mức tối đa cho một mã theo chuẩn "
-                    "UCITS; thanh vượt vạch là mã đang chiếm quá nhiều.")
-    with col2:
+        how_to_read("mỗi thanh là phần trăm tổng tài sản; thanh có vân sọc là tiền mặt. Vạch chấm 10% là mức tối đa "
+                    "cho một mã theo chuẩn UCITS; thanh vượt vạch là mã đang chiếm quá nhiều.")
+    with st.container(key=card_key("sectors")):
         plot(charts.sector_bar(report.sectors))
         how_to_read("tỷ trọng từng ngành trên phần cổ phiếu (không tính tiền mặt). Vạch 50%: quá nửa danh mục "
                     "phụ thuộc một ngành.")
@@ -320,11 +399,11 @@ def risk(ctx: AppContext) -> None:
     stock_returns = market.close.pct_change(fill_method=None)
     extra = {symbol: stock_returns[symbol] for symbol in compare}
 
-    plot(charts.growth_chart(report.portfolio_returns, report.market_returns, extra, sessions))
-    how_to_read("đường cho biết 100 đồng bỏ vào từ đầu giai đoạn sẽ thành bao nhiêu. Đường danh mục nằm trên VN-Index "
+    chart_card(charts.growth_chart(report.portfolio_returns, report.market_returns, extra, sessions),
+               "đường cho biết 100 đồng bỏ vào từ đầu giai đoạn sẽ thành bao nhiêu. Đường danh mục nằm trên VN-Index "
                 "là danh mục tăng tốt hơn thị trường trong giai đoạn đó. Giả định giữ nguyên tỷ trọng hiện tại suốt "
                 "giai đoạn, nên đây là thước đo rủi ro của danh mục hôm nay, không phải lãi/lỗ bạn đã có. "
-                f"Kéo thanh trượt bên dưới để chọn một đoạn thời gian. {HOW_TO_INTERACT}")
+               f"Kéo thanh trượt bên dưới để chọn một đoạn thời gian. {HOW_TO_INTERACT}")
 
     r1, r2, r3 = st.columns(3)
     vol_check = find_check(report, "Độ biến động")
@@ -341,14 +420,12 @@ def risk(ctx: AppContext) -> None:
                "nhau; nút chọn khoảng thời gian chỉ thay đổi các biểu đồ.")
 
     col1, col2 = st.columns(2)
-    with col1:
-        plot(charts.drawdown_chart(report.portfolio_returns, sessions))
-        how_to_read("0% là lúc danh mục đang ở đỉnh. Vùng càng sâu xuống dưới là lúc danh mục giảm càng nhiều so "
-                    "với đỉnh gần nhất; vùng kéo dài là thời gian chờ để hồi lại.")
-    with col2:
-        plot(charts.returns_histogram(report.portfolio_returns, m["var_pct"]))
-        how_to_read("mỗi cột là số phiên có mức lãi/lỗ trong một khoảng. Đường đứt nét là VaR 95%: chỉ khoảng 5% số "
-                    "phiên nằm bên trái đường này. Biểu đồ này luôn dùng 250 phiên gần nhất, giống cách tính VaR.")
+    chart_card(charts.drawdown_chart(report.portfolio_returns, sessions),
+               "0% là lúc danh mục đang ở đỉnh. Vùng càng sâu xuống dưới là lúc danh mục giảm càng nhiều so với đỉnh "
+               "gần nhất; vùng kéo dài là thời gian chờ để hồi lại.", col1)
+    chart_card(charts.returns_histogram(report.portfolio_returns, m["var_pct"]),
+               "mỗi cột là số phiên có mức lãi/lỗ trong một khoảng. Đường đứt nét là VaR 95%: chỉ khoảng 5% số phiên "
+               "nằm bên trái đường này. Biểu đồ này luôn dùng 250 phiên gần nhất, giống cách tính VaR.", col2)
 
 
 # ====================================================================== Thanh khoản & giảm sàn
@@ -390,10 +467,10 @@ def liquidity(ctx: AppContext) -> None:
              f"Bằng {pct(m['floor_loss_1'] / totals['total_value'])} tổng tài sản.", INFO)
     kpi_card(s3, "Giảm sàn 3 phiên liên tiếp", vnd(m["floor_loss_3"]),
              f"Bằng {pct(m['floor_loss_3'] / totals['total_value'])} tổng tài sản.", INFO)
-    plot(charts.stress_bar(report.stress_1, report.stress_3))
-    how_to_read("mỗi cặp cột là số tiền lỗ của một mã. Giá sàn = giá tham chiếu × (1 − biên độ), làm tròn theo bước "
-                "giá; biên độ HOSE 7%, HNX 10%, UPCoM 15%. Giả định giá tham chiếu phiên sau bằng giá đóng cửa gần "
-                "nhất. Đây là kịch bản cực đoan để hình dung rủi ro, không phải dự báo.")
+    chart_card(charts.stress_bar(report.stress_1, report.stress_3),
+               "mỗi cặp cột là số tiền lỗ của một mã; cột có vân sọc là kịch bản 3 phiên. Giá sàn = giá tham chiếu × "
+               "(1 − biên độ), làm tròn theo bước giá; biên độ HOSE 7%, HNX 10%, UPCoM 15%. Giả định giá tham chiếu "
+               "phiên sau bằng giá đóng cửa gần nhất. Đây là kịch bản cực đoan để hình dung rủi ro, không phải dự báo.")
 
 
 # ====================================================================== Thị trường
@@ -424,18 +501,15 @@ def market(ctx: AppContext) -> None:
                        chart_data=(summary["foreign_net_value"] / 1e9).round(0).tolist(), chart_type="bar",
                        help="Giá trị mua trừ giá trị bán của nhà đầu tư nước ngoài; số âm là bán ròng.")
 
-    plot(charts.index_chart(index))
-    how_to_read(f"bấm các nút phía trên để xem nhanh 1 tháng đến toàn bộ lịch sử, hoặc kéo thanh trượt bên dưới. "
-                f"{HOW_TO_INTERACT}")
+    chart_card(charts.index_chart(index), "bấm các nút phía trên để xem nhanh 1 tháng đến toàn bộ lịch sử, hoặc "
+               f"kéo thanh trượt bên dưới. {HOW_TO_INTERACT}")
 
     if len(summary) >= 2:
         col1, col2 = st.columns(2)
-        with col1:
-            plot(charts.foreign_flow_bar(summary))
-            how_to_read("cột xanh là phiên khối ngoại mua nhiều hơn bán, cột cam là bán nhiều hơn mua.")
-        with col2:
-            plot(charts.breadth_chart(summary))
-            how_to_read("số mã tăng nhiều hơn số mã giảm cho thấy đà tăng lan rộng, không chỉ ở vài mã lớn.")
+        chart_card(charts.foreign_flow_bar(summary),
+                   "cột xanh là phiên khối ngoại mua nhiều hơn bán (mua ròng), cột đỏ là bán nhiều hơn mua (bán ròng).", col1)
+        chart_card(charts.breadth_chart(summary),
+                   "số mã tăng nhiều hơn số mã giảm cho thấy đà tăng lan rộng, không chỉ ở vài mã lớn.", col2)
     elif summary.empty:
         st.info("Chưa có số liệu tổng hợp thị trường. Dữ liệu này được lưu mỗi lần cập nhật từ SSI.")
     with st.expander("Bảng số liệu tổng hợp thị trường theo phiên", icon=":material/table:"):

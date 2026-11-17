@@ -1,10 +1,24 @@
 [browser]
 gatherUsageStats = false
 
-# Giao diện sáng/tối tự theo cài đặt của máy người xem. Chỉ đặt màu nhấn (nút chính, mục đang chọn)
-# là xanh dương để không trùng màu đỏ dùng cho trạng thái "Rủi ro cao". Bảng màu đầy đủ làm ở đợt thiết kế.
-[theme.light]
-primaryColor = "#2a78d6"
+# Giao diện sáng, tông tím - vàng. Khóa nền sáng để máy nào (kể cả máy đang bật chế độ tối) cũng hiện đúng thiết kế.
+[theme]
+base = "light"
+primaryColor = "#6d3fd9"
+backgroundColor = "#fdfcff"
+secondaryBackgroundColor = "#f4f0fd"
+textColor = "#1f1937"
+borderColor = "#e7e0f6"
+linkColor = "#6d3fd9"
+violetColor = "#6d3fd9"
+font = "Be Vietnam Pro:https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap, sans-serif"
+headingFontWeights = [800, 700, 700, 700, 600, 600]
+metricValueFontWeight = 700
+baseRadius = "0.8rem"
+buttonRadius = "full"
+showSidebarBorder = false
+chartCategoricalColors = ["#6d3fd9", "#b98000", "#1a9e8f", "#2f6fd6", "#c2336b"]
 
-[theme.dark]
-primaryColor = "#5b9cf0"
+[theme.sidebar]
+backgroundColor = "#f6f2ff"
+secondaryBackgroundColor = "#ffffff"

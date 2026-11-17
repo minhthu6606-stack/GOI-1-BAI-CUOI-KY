@@ -48,3 +48,14 @@ def test_market_charts():
     assert list(flow.data[0].x) == ["13/11", "16/11"]
     assert "Bán ròng" in flow.data[0].customdata[1]
     assert len(charts.breadth_chart(summary).data) == 2
+
+
+def test_diversity_gauge_and_ticker():
+    from src.app import charts
+    from src.app.style import ticker_html
+    gauge = charts.diversity_gauge(4.8)
+    assert gauge.data[0].value == 4.8
+    assert [step["range"][1] for step in gauge.data[0].gauge.steps][:2] == [5, 10]
+    html = ticker_html([("VN-Index", 1736.89, -0.0061), ("FPT", 98500, 0.012), ("VCB", 60000, 0.0)], "Phiên 16/11/2026")
+    assert "1.736,89" in html and "▼ 0,61%" in html and "▲ 1,20%" in html and "98.500" in html
+    assert html.count("FPT") == 2          # nội dung nhân đôi để chạy vòng liền mạch

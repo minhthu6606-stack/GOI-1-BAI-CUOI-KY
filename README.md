@@ -21,7 +21,9 @@ Máy chưa có kho `data/` thì ứng dụng tự dùng bản dữ liệu SSI l�
 dữ liệu THẬT tải từ SSI, chốt đến một phiên; thanh bên ghi rõ phiên chốt. Không cần chọn gì thêm.
 
 ## Giao diện
-Thanh bên trái là menu: **Tổng quan** (kết luận và 6 chỉ số chính), **Nhập danh mục**, **Cảnh báo**,
+Tông tím - vàng trên nền sáng. Mở ứng dụng là **Trang chủ** (giới thiệu sản phẩm, hình minh họa, 4 điều được kiểm
+tra, cách dùng); đầu mỗi trang có dải giá chạy ngang của VN-Index và các mã trong danh mục (phiên mới nhất trong kho).
+Thanh bên trái là menu: **Trang chủ**, **Nhập danh mục**, **Tổng quan** (kết luận và 6 chỉ số chính), **Cảnh báo**,
 **Phân bổ**, **Rủi ro**, **Thanh khoản & giảm sàn**, **Thị trường**, **Phương pháp & dữ liệu**. Dưới menu là khung
 **Dữ liệu**: nguồn, phiên mới nhất, thời điểm tải, trạng thái kết nối và hai nút *Kiểm tra kết nối*, *Cập nhật dữ liệu*.
 Máy có API key và có kho `data/`: mở ứng dụng sau 15:00 ngày làm việc sẽ tự tải phiên mới (mỗi phiên một lần).
@@ -65,6 +67,9 @@ nhất. Nên chạy sau 15:00 để có giá đóng cửa cuối phiên.
     src/app/views.py              nội dung từng trang
     src/app/charts.py             các biểu đồ Plotly (có tương tác: rê chuột, phóng to, thanh trượt thời gian)
     src/app/ui.py                 biểu tượng, nhãn tiếng Việt, quy tắc "dữ liệu đã mới chưa"
+    src/app/style.py              CSS bổ sung, dải giá chạy ngang, hình minh họa trang chủ (SVG tự vẽ)
+    src/app/assets/               logo của sản phẩm (SVG)
+    .streamlit/config.toml        màu, phông chữ (Be Vietnam Pro), bo góc của giao diện
     tests/                   kiểm thử tự động
     scripts/                 các script chạy thủ công
 

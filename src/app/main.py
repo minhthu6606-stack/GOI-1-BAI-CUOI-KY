@@ -28,7 +28,7 @@ import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 
 from src import config  # noqa: E402
-from src.app import views  # noqa: E402
+from src.app import style, views  # noqa: E402
 from src.app.ui import ICONS, expected_latest_session, format_date, format_time, is_up_to_date  # noqa: E402
 from src.data.storage import Storage  # noqa: E402
 from src.data.updater import DataUpdater  # noqa: E402
@@ -37,7 +37,10 @@ from src.finance.market_data import MarketData, load_market_data  # noqa: E402
 from src.finance.portfolio import CASH_SYMBOL, PortfolioError, build_portfolio  # noqa: E402
 from src.ssi_api.client import SSIClient, SSIError  # noqa: E402
 
-st.set_page_config(page_title=config.APP_NAME, page_icon=ICONS["app"], layout="wide")
+ASSETS = Path(__file__).resolve().parent / "assets"
+st.set_page_config(page_title=config.APP_NAME, page_icon=str(ASSETS / "logo_icon.svg"), layout="wide")
+st.logo(str(ASSETS / "logo.svg"), size="large", icon_image=str(ASSETS / "logo_icon.svg"))
+style.inject_css()
 logger = logging.getLogger("app")
 
 
@@ -218,7 +221,8 @@ def _page(render, title: str, key: str, url: str, default: bool = False) -> st.P
 
 
 ctx.pages = {
-    "overview": _page(views.overview, "Tổng quan", "overview", "tong-quan", default=True),
+    "home": _page(views.home, "Trang chủ", "home", "trang-chu", default=True),
+    "overview": _page(views.overview, "Tổng quan", "overview", "tong-quan"),
     "portfolio": _page(views.portfolio_input, "Nhập danh mục", "portfolio", "nhap-danh-muc"),
     "alerts": _page(views.alerts, "Cảnh báo", "alerts", "canh-bao"),
     "allocation": _page(views.allocation, "Phân bổ", "allocation", "phan-bo"),
@@ -229,8 +233,8 @@ ctx.pages = {
 }
 p = ctx.pages
 navigation = st.navigation({
-    "Danh mục": [p["overview"], p["portfolio"]],
-    "Phân tích": [p["alerts"], p["allocation"], p["risk"], p["liquidity"]],
+    "Bắt đầu": [p["home"], p["portfolio"]],
+    "Kết quả kiểm tra": [p["overview"], p["alerts"], p["allocation"], p["risk"], p["liquidity"]],
     "Thị trường & dữ liệu": [p["market"], p["method"]],
 })
 
@@ -274,6 +278,31 @@ def data_panel() -> None:
 
 with st.sidebar:
     data_panel()
+
+# Dải giá chạy ngang ở đầu mọi trang: VN-Index và các mã trong danh mục, phiên mới nhất trong kho
+def ticker_items() -> list[tuple[str, float, float]]:
+    market = ctx.market
+    if market is None or market.index_close.empty:
+        return []
+    index = market.index_close
+    items = [("VN-Index", float(index.iloc[-1]),
+              float(index.iloc[-1] / index.iloc[-2] - 1) if len(index) >= 2 else float("nan"))]
+    if not market.latest.empty:
+        for symbol, row in market.latest.iterrows():
+            close = pd.to_numeric(row.get("close"), errors="coerce")
+            if pd.isna(close):
+                continue
+            change = pd.to_numeric(row.get("price_change_pct"), errors="coerce") / 100
+            if pd.isna(change) and symbol in market.close.columns:  # thiếu % thay đổi: tính từ 2 phiên gần nhất
+                series = market.close[symbol].dropna()
+                change = series.iloc[-1] / series.iloc[-2] - 1 if len(series) >= 2 else float("nan")
+            items.append((str(symbol), float(close), float(change)))
+    return items
+
+
+items = ticker_items()
+if items:
+    st.html(style.ticker_html(items, f"Phiên {format_date(ctx.market.last_trading_date)}"))
 
 # Thông báo chung (hiện ở đầu mọi trang)
 if "update_message" in state:

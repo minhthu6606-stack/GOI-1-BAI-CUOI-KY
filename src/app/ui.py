@@ -15,6 +15,7 @@ from src.finance.health import DANGER, GOOD, INFO, WARNING
 # ---------------------------------------------------------------- biểu tượng (Material Symbols)
 ICONS = {
     "app": ":material/monitor_heart:",
+    "home": ":material/home:",
     "overview": ":material/space_dashboard:",
     "portfolio": ":material/edit_note:",
     "alerts": ":material/notifications_active:",

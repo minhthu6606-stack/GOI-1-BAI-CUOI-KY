@@ -2,7 +2,7 @@
 Cập nhật kho dữ liệu SQLite từ SSI.
 
 Cách chạy (trong thư mục gốc của repo, đã kích hoạt .venv):
-    python scripts/update_data.py                       # các mã của danh mục minh họa
+    python scripts/update_data.py                       # các mã của danh mục mặc định
     python scripts/update_data.py --symbols FPT ACB     # chỉ định mã khác
     python scripts/update_data.py --status              # chỉ xem kho đang có gì, không tải
 

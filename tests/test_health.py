@@ -79,3 +79,22 @@ def test_vnd_short():
 def test_vnd_short_thousands():
     from src.finance.health import vnd_short
     assert vnd_short(8_540_894_758_680) == "8.540,89 tỷ đ"
+
+
+def test_every_check_has_action_and_verdict_uses_worst_level(report):
+    from src.finance.health import DANGER, GOOD, WARNING, Check, count_by_status, overall_verdict
+    assert all(c.action for c in report.checks)
+    good = Check("g", "a", "1", GOOD, "", "")
+    warn = Check("g", "b", "1", WARNING, "", "")
+    bad = Check("g", "c", "1", DANGER, "", "")
+    assert overall_verdict([good, good])[0] == GOOD
+    assert overall_verdict([good, warn])[0] == WARNING
+    assert overall_verdict([good, warn, bad])[1] == "Cần xem lại"
+    assert count_by_status([good, warn, bad, bad]) == {DANGER: 2, WARNING: 1, GOOD: 1, "Thông tin": 0}
+
+
+def test_vnd_full_and_billion():
+    from src.finance.health import vnd, vnd_billion
+    assert vnd(500_000_000) == "500.000.000 đ"
+    assert vnd(-52_415_000) == "-52.415.000 đ"
+    assert vnd_billion(25_432_100_000_000) == "25.432 tỷ đ"

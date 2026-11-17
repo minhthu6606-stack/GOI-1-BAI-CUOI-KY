@@ -1,2 +1,10 @@
 [browser]
 gatherUsageStats = false
+
+# Giao diện sáng/tối tự theo cài đặt của máy người xem. Chỉ đặt màu nhấn (nút chính, mục đang chọn)
+# là xanh dương để không trùng màu đỏ dùng cho trạng thái "Rủi ro cao". Bảng màu đầy đủ làm ở đợt thiết kế.
+[theme.light]
+primaryColor = "#2a78d6"
+
+[theme.dark]
+primaryColor = "#5b9cf0"

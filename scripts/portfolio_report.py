@@ -2,7 +2,7 @@
 In báo cáo sức khỏe danh mục ra màn hình (bản dòng lệnh của phần phân tích trên giao diện).
 
 Cách chạy:
-    python scripts/portfolio_report.py                                   # danh mục minh họa
+    python scripts/portfolio_report.py                                   # danh mục mặc định
     python scripts/portfolio_report.py --portfolio duong_dan/danh_muc.csv
     python scripts/portfolio_report.py --participation 0.1               # giả định bán tối đa 10% ADV/phiên
 """

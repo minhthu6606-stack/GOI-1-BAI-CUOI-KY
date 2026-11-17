@@ -32,8 +32,9 @@ class Check:
     value: str          # giá trị đã định dạng để hiển thị
     status: str
     threshold: str      # ngưỡng so sánh
-    explanation: str    # giải thích cho người dùng
+    explanation: str    # giải thích ngắn cho người dùng
     source: str = ""    # cơ sở của ngưỡng
+    action: str = ""    # "Nên làm gì?": gợi ý chung về quản trị rủi ro, KHÔNG khuyến nghị mua/bán mã cụ thể
 
 
 @dataclass
@@ -52,6 +53,31 @@ class HealthReport:
 
     def checks_frame(self) -> pd.DataFrame:
         return pd.DataFrame([c.__dict__ for c in self.checks])
+
+
+VERDICT_TEXT = {
+    DANGER: ("Cần xem lại", "Danh mục có điểm rủi ro cao, nên xem lại cách phân bổ."),
+    WARNING: ("Cần theo dõi", "Danh mục chưa có rủi ro cao nhưng có điểm cần theo dõi."),
+    GOOD: ("Khỏe", "Danh mục đạt các ngưỡng đang kiểm tra."),
+}
+
+
+def overall_verdict(checks: list[Check]) -> tuple[str, str, str]:
+    """Kết luận chung theo nguyên tắc "mức xấu nhất": có một mục Rủi ro cao thì cả danh mục là Rủi ro cao.
+
+    Giống một lần khám sức khỏe: chỉ cần một chỉ số vượt ngưỡng nghiêm trọng là cần xem lại, dù các chỉ số
+    khác đều tốt. Không cộng điểm hay gán trọng số (tránh phải tự đặt trọng số không có cơ sở).
+    Trả về (mức, nhãn ngắn, câu kết luận).
+    """
+    statuses = {c.status for c in checks}
+    level = DANGER if DANGER in statuses else (WARNING if WARNING in statuses else GOOD)
+    label, sentence = VERDICT_TEXT[level]
+    return level, label, sentence
+
+
+def count_by_status(checks: list[Check]) -> dict[str, int]:
+    """Đếm số mục theo từng mức, luôn đủ 4 khóa theo thứ tự Rủi ro cao, Cảnh báo, Tốt, Thông tin."""
+    return {status: sum(c.status == status for c in checks) for status in (DANGER, WARNING, GOOD, INFO)}
 
 
 def pct(value: float, digits: int = 1) -> str:
@@ -89,6 +115,13 @@ def vnd(value: float) -> str:
     if value is None or value != value:
         return "không đủ dữ liệu"
     return f"{value:,.0f} đ".replace(",", ".")
+
+
+def vnd_billion(value: float) -> str:
+    """Tiền quy mô toàn thị trường, ghi theo tỷ đồng, vd 25432100000000 -> '25.432 tỷ đ'."""
+    if value is None or value != value:
+        return "không đủ dữ liệu"
+    return f"{_vn_number(value / 1e9, 0)} tỷ đ"
 
 
 def build_health_report(portfolio: Portfolio, market: MarketData,
@@ -146,21 +179,26 @@ def _add_checks(report: HealthReport, ucits: dict, n_eff: float, sectors: pd.Ser
     m, total = report.metrics, report.totals["total_value"]
 
     # 1. Mã lớn nhất so với chuẩn UCITS 10%
-    max_w = ucits["max_weight"]
+    max_w, top = ucits["max_weight"], ucits["max_symbol"]
     add(Check(
-        "Tập trung", "Tỷ trọng mã lớn nhất", f"{ucits['max_symbol']}: {pct(max_w)}",
+        "Mức tập trung", "Tỷ trọng mã lớn nhất", f"{top}: {pct(max_w)}",
         WARNING if ucits["breach_single"] else GOOD, "≤ 10% tổng tài sản",
-        (f"{ucits['max_symbol']} chiếm {pct(max_w)} tổng tài sản. "
-         + (f"Các mã vượt 10%: {', '.join(ucits['over_single_limit'])}. Nếu một mã giảm mạnh, cả danh mục chịu ảnh hưởng lớn."
-            if ucits["breach_single"] else "Không mã nào vượt 10%.")),
+        (f"{top} chiếm {pct(max_w)} tổng tài sản"
+         + (f", vượt mốc 10%. Nếu riêng {top} giảm 10%, tổng tài sản giảm khoảng {pct(max_w * 0.1)}."
+            if ucits["breach_single"] else ", không mã nào vượt mốc 10%.")),
         "UCITS 2009/65/EC, Điều 52 (chuẩn tham chiếu của quỹ đại chúng)",
+        ("Cân nhắc phân bổ lại để không mã nào vượt 10% tổng tài sản, hoặc chỉ giữ tỷ trọng cao ở mã bạn hiểu rõ."
+         if ucits["breach_single"] else "Duy trì; kiểm tra lại khi giá một mã tăng mạnh làm tỷ trọng phình ra."),
     ))
     # 2. Tổng các khoản lớn (quy tắc 40%)
     add(Check(
-        "Tập trung", "Tổng các mã chiếm trên 5%", pct(ucits["large_positions_sum"]),
+        "Mức tập trung", "Tổng các mã chiếm trên 5%", pct(ucits["large_positions_sum"]),
         WARNING if ucits["breach_aggregate"] else GOOD, "≤ 40% tổng tài sản",
-        f"Các mã chiếm trên 5% cộng lại bằng {pct(ucits['large_positions_sum'])} tổng tài sản.",
+        (f"Các mã có tỷ trọng trên 5% cộng lại bằng {pct(ucits['large_positions_sum'])} tổng tài sản"
+         + (": phần lớn tài sản phụ thuộc vào vài mã lớn." if ucits["breach_aggregate"] else ".")),
         "UCITS 2009/65/EC, Điều 52 (quy tắc 5/10/40)",
+        ("Cân nhắc thêm các vị thế nhỏ hơn hoặc giữ thêm tiền mặt để giảm phụ thuộc vào vài mã lớn."
+         if ucits["breach_aggregate"] else "Duy trì."),
     ))
     # 3. Số mã hiệu dụng
     if n_eff == n_eff:
@@ -170,75 +208,94 @@ def _add_checks(report: HealthReport, ucits: dict, n_eff: float, sectors: pd.Ser
     else:
         status, value = INFO, "không đủ dữ liệu"
     add(Check(
-        "Tập trung", "Số mã hiệu dụng (1/HHI)", value, status, "≥ 10 mã: tốt; < 5 mã: tập trung cao",
-        f"Về mức đa dạng hóa, danh mục tương đương {value} mã có tỷ trọng bằng nhau.",
-        "Evans & Archer (1968)",
+        "Mức tập trung", "Mức đa dạng hóa (Số mã hiệu dụng)", f"{value} mã", status,
+        "≥ 10 mã: tốt; < 5 mã: tập trung cao",
+        f"Danh mục rủi ro tương đương việc nắm {value} mã có tỷ trọng bằng nhau. Từ 10 mã trở lên là đa dạng hóa tốt.",
+        "Evans & Archer (1968); tính bằng 1 / HHI",
+        {DANGER: "Cân nhắc thêm mã ở ngành khác hoặc chia tỷ trọng đều hơn giữa các mã đang có.",
+         WARNING: "Có thể đa dạng hóa thêm bằng mã ở ngành khác.",
+         GOOD: "Mức đa dạng hóa tốt; duy trì.", INFO: ""}[status],
     ))
     # 4. Ngành lớn nhất
     if not sectors.empty:
         top_sector, top_weight = sectors.index[0], float(sectors.iloc[0])
+        over = top_weight > concentration.SECTOR_LIMIT
         add(Check(
-            "Tập trung", "Ngành chiếm tỷ trọng lớn nhất", f"{top_sector}: {pct(top_weight)}",
-            WARNING if top_weight > concentration.SECTOR_LIMIT else GOOD, "≤ 50% phần cổ phiếu",
-            f"Ngành {top_sector} chiếm {pct(top_weight)} phần cổ phiếu của danh mục.",
-            "Quy tắc nghiệp vụ tự đặt: quá nửa danh mục phụ thuộc một ngành",
+            "Mức tập trung", "Ngành chiếm tỷ trọng lớn nhất", f"{top_sector}: {pct(top_weight)}",
+            WARNING if over else GOOD, "≤ 50% phần cổ phiếu",
+            f"Ngành {top_sector} chiếm {pct(top_weight)} phần cổ phiếu" + (", quá nửa danh mục." if over else "."),
+            "Quy tắc tự đặt: quá nửa danh mục phụ thuộc một ngành",
+            ("Cân nhắc bổ sung mã ở ngành khác để một tin xấu của ngành không ảnh hưởng quá nửa danh mục."
+             if over else "Không ngành nào chiếm quá nửa danh mục; duy trì."),
         ))
     # 5. Thanh khoản
     slow = report.liquidity[report.liquidity["bucket"] != liquidity.BUCKET_HIGH]
-    slow_text = ", ".join(f"{r.symbol} ({r.days_to_cash:.0f} ngày)" for r in slow.itertuples()) or "không có"
+    slow_text = ", ".join(f"{r.symbol} ({r.days_to_cash:.0f} ngày)" for r in slow.itertuples())
+    over = illiquid > liquidity.ILLIQUID_SHARE_LIMIT
     add(Check(
-        "Thanh khoản", "Tỷ trọng tài sản thanh khoản thấp", pct(illiquid),
-        WARNING if illiquid > liquidity.ILLIQUID_SHARE_LIMIT else GOOD, "≤ 15% tổng tài sản",
-        (f"Giả định mỗi phiên chỉ bán tối đa {pct(participation, 0)} khối lượng trung bình 20 phiên, "
-         f"cộng 2 ngày thanh toán T+2. Mã cần hơn 3 ngày làm việc để có tiền: {slow_text}."),
+        "Thanh khoản", "Tài sản khó bán nhanh", pct(illiquid),
+        WARNING if over else GOOD, "≤ 15% tổng tài sản",
+        (f"Giả định mỗi phiên bán tối đa {pct(participation, 0)} khối lượng giao dịch bình quân 20 phiên (ADV20). "
+         + (f"Mã cần hơn 3 ngày làm việc mới có tiền: {slow_text}." if slow_text
+            else "Mọi mã đều bán hết và có tiền trong 3 ngày làm việc.")),
         "SEC Rule 22e-4 (17 CFR 270.22e-4)",
+        ("Giữ phần tiền có thể cần gấp ở tiền mặt hoặc mã thanh khoản cao." if over
+         else "Không cần làm gì; kiểm tra lại khi quy mô vốn tăng nhiều."),
     ))
-    # 6–8. Rủi ro thị trường (mô tả)
+    # 6–10. Rủi ro thị trường
     vol, mvol = m["volatility"], m["market_volatility"]
     add(Check(
-        "Rủi ro thị trường", "Độ biến động năm (250 phiên)", pct(vol), INFO, f"VN-Index: {pct(mvol)}",
-        (f"Biến động của danh mục bằng {num(vol / mvol)} lần VN-Index."
-         if vol == vol and mvol else "Không đủ dữ liệu để so sánh với thị trường."),
-        "Độ lệch chuẩn lợi suất ngày × căn(252)",
+        "Rủi ro thị trường", "Độ biến động năm (Volatility)", pct(vol), INFO, f"VN-Index: {pct(mvol)}",
+        (f"Danh mục dao động mạnh bằng {num(vol / mvol)} lần VN-Index ({pct(vol)} so với {pct(mvol)}), "
+         "tính trên 250 phiên gần nhất." if vol == vol and mvol else "Không đủ dữ liệu để so sánh với thị trường."),
+        "Độ lệch chuẩn lợi suất ngày × √252",
+        "Thông tin để so sánh: biến động càng cao, giá trị danh mục lên xuống càng mạnh.",
     ))
     b = m["beta"]
     add(Check(
-        "Rủi ro thị trường", "Beta so với VN-Index", num(b),
-        INFO, "Beta = 1: biến động cùng nhịp thị trường",
-        (f"Khi VN-Index thay đổi 1%, danh mục có xu hướng thay đổi khoảng {num(b)}%."
-         if b == b else "Không đủ dữ liệu."),
+        "Rủi ro thị trường", "Độ nhạy với thị trường (Beta)", num(b), INFO, "Beta = 1: cùng nhịp VN-Index",
+        (f"VN-Index tăng hoặc giảm 1% thì danh mục có xu hướng thay đổi khoảng {num(b)}%." if b == b
+         else "Không đủ dữ liệu."),
         "Sharpe (1964)",
+        "Beta thấp chưa chắc là ít rủi ro: xem thêm mục R² bên dưới.",
     ))
     r2 = m["r_squared"]
+    r2_status = INFO if r2 != r2 else (WARNING if r2 < 0.5 else GOOD)
     add(Check(
-        "Rủi ro thị trường", "Phần rủi ro đến từ thị trường chung (R²)", pct(r2, 0),
-        INFO if r2 != r2 else (WARNING if r2 < 0.5 else GOOD), "≥ 50%: rủi ro chủ yếu đến từ thị trường",
-        (f"Khoảng {pct(r2, 0)} biến động của danh mục đến từ thị trường chung; {pct(1 - r2, 0)} còn lại là rủi ro "
-         "riêng của từng mã. Rủi ro riêng có thể giảm bằng cách đa dạng hóa, rủi ro thị trường thì không."
-         if r2 == r2 else "Không đủ dữ liệu."),
+        "Rủi ro thị trường", "Phần rủi ro đến từ thị trường chung (R²)", pct(r2, 0), r2_status,
+        "≥ 50%: rủi ro chủ yếu đến từ thị trường",
+        (f"Khoảng {pct(r2, 0)} biến động đến từ thị trường chung, {pct(1 - r2, 0)} còn lại là rủi ro riêng của "
+         "từng mã." if r2 == r2 else "Không đủ dữ liệu."),
         "Mô hình chỉ số đơn - Sharpe (1963)",
+        {WARNING: "Rủi ro riêng giảm được bằng đa dạng hóa: thêm mã ở ngành khác hoặc giảm tỷ trọng mã lớn.",
+         GOOD: "Rủi ro chủ yếu đến từ thị trường chung, đa dạng hóa thêm sẽ ít tác dụng.", INFO: ""}[r2_status],
     ))
     add(Check(
-        "Rủi ro thị trường", "VaR lịch sử 1 ngày, độ tin cậy 95%",
-        f"{pct(m['var_pct'])} ≈ {vnd(m['var_amount'])}", INFO, "Kiểm định ngoài mẫu ở phần Kiểm chứng",
-        (f"Trong 250 phiên gần nhất, 95% số phiên danh mục (với tỷ trọng hiện tại) không lỗ quá "
-         f"{pct(m['var_pct'])}, tương đương {vnd(m['var_amount'])}. VaR không cho biết mức lỗ trong 5% phiên xấu nhất."),
+        "Rủi ro thị trường", "Mức lỗ trong một phiên xấu (VaR 95%)", f"{pct(m['var_pct'])} ≈ {vnd(m['var_amount'])}",
+        INFO, "Không có ngưỡng chuẩn",
+        (f"Trong 100 phiên, khoảng 95 phiên danh mục không lỗ quá {pct(m['var_pct'])} "
+         f"(≈ {vnd(m['var_amount'])}); 5 phiên còn lại có thể lỗ nhiều hơn. Tính trên 250 phiên gần nhất."),
         "Jorion (2007), mô phỏng lịch sử",
+        "Nếu mức lỗ này vượt khả năng chịu đựng của bạn, cân nhắc giảm tỷ trọng cổ phiếu hoặc giữ thêm tiền mặt.",
     ))
     add(Check(
-        "Rủi ro thị trường", "Mức sụt giảm tối đa trong 1 năm", pct(m["max_drawdown_1y"]), INFO, "",
-        f"Nếu nắm giữ danh mục này trong 250 phiên vừa qua, lúc tệ nhất giá trị giảm {pct(abs(m['max_drawdown_1y']))} so với đỉnh.",
+        "Rủi ro thị trường", "Sụt giảm tối đa 1 năm (Max Drawdown)", pct(m["max_drawdown_1y"]), INFO, "",
+        f"Nếu nắm danh mục này trong 250 phiên vừa qua, có lúc giá trị giảm {pct(abs(m['max_drawdown_1y']))} so với đỉnh trước đó.",
         "Từ đỉnh xuống đáy của chuỗi giá trị danh mục",
+        "Tự hỏi: nếu danh mục giảm chừng đó, bạn có phải bán ra không? Nếu có, mức rủi ro hiện tại có thể quá cao.",
     ))
-    # 9. Kịch bản giảm sàn
+    # 11. Kịch bản giảm sàn
+    share_1 = m["floor_loss_1"] / total if total else float("nan")
+    share_3 = m["floor_loss_3"] / total if total else float("nan")
     add(Check(
-        "Kịch bản", "Mọi mã giảm sàn 1 phiên / 3 phiên liên tiếp",
-        f"{vnd(m['floor_loss_1'])} / {vnd(m['floor_loss_3'])}", INFO,
-        f"{pct(m['floor_loss_1'] / total if total else float('nan'))} / {pct(m['floor_loss_3'] / total if total else float('nan'))} tổng tài sản",
-        "Kịch bản cực đoan theo biên độ sàn (HOSE 7%, HNX 10%, UPCoM 15%), dùng để hình dung rủi ro đuôi, không phải dự báo.",
-        "Quy chế biên độ giá của HOSE, HNX",
+        "Kịch bản xấu", "Mọi mã cùng giảm sàn", f"1 phiên: {vnd(m['floor_loss_1'])}",
+        INFO, f"{pct(share_1)} (1 phiên) / {pct(share_3)} (3 phiên) tổng tài sản",
+        (f"Nếu mọi mã cùng giảm sàn, bạn lỗ {vnd(m['floor_loss_1'])} sau 1 phiên và {vnd(m['floor_loss_3'])} sau "
+         "3 phiên liên tiếp. Đây là kịch bản cực đoan, không phải dự báo."),
+        "Biên độ giá HOSE 7%, HNX 10%, UPCoM 15%",
+        "Giữ một phần tiền mặt đủ dùng để không bị buộc phải bán trong những phiên như vậy.",
     ))
-    # 10. Room khối ngoại
+    # 12. Room khối ngoại
     if not market.latest.empty and "foreign_room_remaining" in market.latest.columns:
         latest = market.latest
         room_ratio = (latest["foreign_room_remaining"] / latest["foreign_room_total"]).dropna()
@@ -246,13 +303,12 @@ def _add_checks(report: HealthReport, ucits: dict, n_eff: float, sectors: pd.Ser
         if held:
             lowest = room_ratio[held].sort_values()
             full = [s for s, v in lowest.items() if v <= 0]
-            explanation = ("Tỷ lệ room còn lại / tổng room của từng mã: "
-                           + ", ".join(f"{s} {pct(float(v))}" for s, v in lowest.items()) + ".")
+            explanation = "Room còn lại / tổng room: " + ", ".join(f"{s} {pct(float(v))}" for s, v in lowest.items()) + "."
             if full:
-                explanation += (f" {', '.join(full)} đã hết room: nhà đầu tư nước ngoài chỉ mua được khi có nhà đầu tư "
-                                "nước ngoài khác bán ra, nên nhu cầu mua từ khối ngoại bị giới hạn.")
+                explanation += f" {', '.join(full)} đã hết room: khối ngoại chỉ mua được khi có nhà đầu tư nước ngoài khác bán."
             add(Check(
-                "Khối ngoại", "Room ngoại còn lại thấp nhất", f"{lowest.index[0]}: {pct(float(lowest.iloc[0]))}", INFO,
-                "Hết room: nhà đầu tư nước ngoài không mua thêm được", explanation,
-                "Dữ liệu remainForeignRoom, totalForeignRoom của SSI",
+                "Khối ngoại", "Room ngoại còn lại (Foreign room)", f"{lowest.index[0]}: {pct(float(lowest.iloc[0]))}",
+                INFO, "Hết room: nhà đầu tư nước ngoài không mua thêm được", explanation,
+                "Trường remainForeignRoom, totalForeignRoom của SSI",
+                "Thông tin tham khảo: mã hết room có lực mua từ khối ngoại bị giới hạn.",
             ))

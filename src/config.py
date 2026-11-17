@@ -8,20 +8,23 @@ from __future__ import annotations
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-# ----- Sản phẩm -----
+# ----- Sản phẩm (hiển thị ở trang Tổng quan) -----
 APP_NAME = "Khám Sức Khỏe Danh Mục"
-APP_GOAL = ("Chẩn đoán rủi ro của danh mục cổ phiếu: tập trung, thanh khoản, biến động, "
-            "kịch bản giảm sàn - kèm giải thích dễ hiểu")
-APP_USERS = "Nhà đầu tư cá nhân mới, nắm khoảng 3–10 mã cổ phiếu niêm yết tại Việt Nam"
+APP_TAGLINE = "Kiểm tra rủi ro danh mục cổ phiếu Việt Nam bằng dữ liệu thật từ SSI"
+APP_GOAL = ("Bạn nhập các mã cổ phiếu đang nắm, ứng dụng cho biết danh mục có đang dồn quá nhiều tiền vào "
+            "một mã hay một ngành không, cần bao lâu để bán hết khi cần tiền gấp, và một phiên thị trường xấu "
+            "có thể làm bạn mất khoảng bao nhiêu")
+APP_USERS = ("Nhà đầu tư cá nhân mới tham gia thị trường, đang nắm khoảng 3–10 mã cổ phiếu và muốn tự kiểm tra "
+             "rủi ro trước khi quyết định mua thêm hay cơ cấu lại")
 
 # ----- Đường dẫn -----
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data"            # dữ liệu tải về (không đưa lên GitHub)
 LOG_DIR = PROJECT_ROOT / "logs"             # nhật ký chạy chương trình (không đưa lên GitHub)
-SAMPLE_DIR = PROJECT_ROOT / "data_sample"   # dữ liệu mẫu cho người chấm (có đưa lên GitHub)
+SAMPLE_DIR = PROJECT_ROOT / "data_sample"   # bản dữ liệu SSI lưu kèm mã nguồn (có đưa lên GitHub)
 DB_PATH = DATA_DIR / "portfolio.db"         # kho SQLite
-SAMPLE_DB_PATH = SAMPLE_DIR / "sample.db"   # bản sao dữ liệu thật dùng cho chế độ dữ liệu mẫu
-DEMO_PORTFOLIO_PATH = SAMPLE_DIR / "demo_portfolio.csv"
+SAMPLE_DB_PATH = SAMPLE_DIR / "sample.db"   # bản chốt dữ liệu thật, dùng khi máy chưa có kho data/ và API key
+DEMO_PORTFOLIO_PATH = SAMPLE_DIR / "demo_portfolio.csv"   # danh mục mặc định khi mở ứng dụng
 
 # ----- Múi giờ: mọi dấu thời gian lưu và hiển thị theo giờ Việt Nam (yêu cầu Mục 4 của đề) -----
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -39,13 +42,16 @@ SSI_MAX_DAYS_PER_REQUEST = 365   # endpoint ohlc: chia khoảng thời gian dài
 SSI_SUMMARY_MAX_DAYS = 120
 
 # ----- Cập nhật dữ liệu -----
-DEFAULT_SYMBOLS = ["FPT", "HPG", "VCB", "MBB", "SSI", "MWG"]  # các mã của danh mục minh họa
+DEFAULT_SYMBOLS = ["FPT", "HPG", "VCB", "MBB", "SSI", "MWG"]  # các mã của danh mục mặc định
 MARKET_INDEX = "VNINDEX"         # chỉ số thị trường: dùng làm lịch giao dịch chuẩn và để tính beta
 HISTORY_YEARS = 3                # độ dài lịch sử tải lần đầu
 OVERLAP_DAYS = 14                # mỗi lần cập nhật tải lại 14 ngày gần nhất để phát hiện giá lịch sử bị điều chỉnh
 PRICE_ADJUST_TOLERANCE = 0.001   # lệch > 0,1% giữa giá đã lưu và giá mới tải => SSI đã điều chỉnh lại lịch sử
 BOARDS = ("HOSE", "HNX", "UPCOM")
 SECURITIES_MAX_AGE_DAYS = 7      # danh sách mã (ngành, số cổ phiếu niêm yết) làm mới mỗi tuần
+MARKET_SUMMARY_SESSIONS = 20     # lưu tổng hợp thị trường (độ rộng, khối ngoại) cho 20 phiên gần nhất
+SESSION_DATA_READY_HOUR = 15     # sau 15:00 coi như dữ liệu phiên trong ngày đã chốt (HOSE đóng cửa 14:45)
+AUTO_UPDATE_ON_OPEN = True       # có API key + có kho data/ => mở ứng dụng tự tải phiên mới (mỗi phiên tối đa 1 lần)
 
 # Định dạng ngày SSI chấp nhận - dò bằng scripts/check_ssi_connection.py ngày 16/11/2026
 SSI_DATE_FORMAT_SUMMARY = "%Y/%m/%d"           # endpoint securitiesSummary, indexSummary

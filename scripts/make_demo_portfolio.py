@@ -6,7 +6,7 @@ Thiết kế có chủ đích để khi trình diễn, sản phẩm có đủ c�
     - 2 mã ngân hàng (VCB, MBB) -> thấy rõ tập trung theo ngành;
     - ~10% tiền mặt.
 Số cổ phiếu làm tròn xuống theo lô 100. Giá vốn giả định = giá đóng cửa (đã điều chỉnh)
-khoảng 60 phiên trước, làm tròn theo bước giá, để có lãi/lỗ minh họa.
+khoảng 60 phiên trước, làm tròn theo bước giá, để có lãi/lỗ ban đầu.
 
 Cách chạy (sau khi đã chạy scripts/update_data.py):
     python scripts/make_demo_portfolio.py

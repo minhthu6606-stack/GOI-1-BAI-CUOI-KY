@@ -34,3 +34,17 @@ def test_drawdown_and_histogram():
 def test_stress_bar_two_series():
     frame = pd.DataFrame({"symbol": ["A"], "loss": [1000.0]})
     assert [t.name for t in charts.stress_bar(frame, frame).data] == ["Giảm sàn 1 phiên", "Giảm sàn 3 phiên liên tiếp"]
+
+
+def test_market_charts():
+    import pandas as pd
+    from src.app import charts
+    index = pd.Series([1700.0, 1710.0, 1695.0], index=["2026-11-12", "2026-11-13", "2026-11-16"])
+    fig = charts.index_chart(index)
+    assert fig.layout.xaxis.rangeselector.buttons[-1].label == "Tất cả"
+    summary = pd.DataFrame({"trading_date": ["2026-11-13", "2026-11-16"], "foreign_net_value": [5e11, -2e11],
+                            "advances": [120, 90], "declines": [100, 160]})
+    flow = charts.foreign_flow_bar(summary)
+    assert list(flow.data[0].x) == ["13/11", "16/11"]
+    assert "Bán ròng" in flow.data[0].customdata[1]
+    assert len(charts.breadth_chart(summary).data) == 2

@@ -17,8 +17,14 @@ kiểm thử tự động. Đang làm: kiểm định VaR ngoài mẫu và hoàn
     python -m pip install -r requirements.txt
     streamlit run src\app\main.py
 
-Ở thanh bên trái, chọn **Dữ liệu mẫu (không cần API key)**. Dữ liệu mẫu (`data_sample/sample.db`) là dữ liệu THẬT
-tải từ SSI và chốt ở một ngày; giao diện ghi rõ ngày chốt.
+Máy chưa có kho `data/` thì ứng dụng tự dùng bản dữ liệu SSI lưu kèm mã nguồn (`data_sample/sample.db`): đây là
+dữ liệu THẬT tải từ SSI, chốt đến một phiên; thanh bên ghi rõ phiên chốt. Không cần chọn gì thêm.
+
+## Giao diện
+Thanh bên trái là menu: **Tổng quan** (kết luận và 6 chỉ số chính), **Nhập danh mục**, **Cảnh báo**,
+**Phân bổ**, **Rủi ro**, **Thanh khoản & giảm sàn**, **Thị trường**, **Phương pháp & dữ liệu**. Dưới menu là khung
+**Dữ liệu**: nguồn, phiên mới nhất, thời điểm tải, trạng thái kết nối và hai nút *Kiểm tra kết nối*, *Cập nhật dữ liệu*.
+Máy có API key và có kho `data/`: mở ứng dụng sau 15:00 ngày làm việc sẽ tự tải phiên mới (mỗi phiên một lần).
 
 ## Cài đặt (Windows, PowerShell)
     python -m venv .venv
@@ -27,18 +33,19 @@ tải từ SSI và chốt ở một ngày; giao diện ghi rõ ngày chốt.
     Copy-Item .env.example .env   # rồi điền SSI_API_KEY, SSI_API_SECRET của bạn
 
 ## Chạy với dữ liệu trực tiếp từ SSI
-    python scripts\update_data.py            # tải/cập nhật dữ liệu danh mục minh họa vào data/portfolio.db
+    python scripts\update_data.py            # tải/cập nhật dữ liệu các mã mặc định vào data/portfolio.db
     python scripts\update_data.py --symbols FPT ACB   # tải/cập nhật các mã chỉ định
     python scripts\update_data.py --status   # xem kho đang có gì và nhật ký cập nhật, không tải
-    python scripts\make_demo_portfolio.py    # tạo danh mục minh họa data_sample\demo_portfolio.csv theo giá mới nhất
+    python scripts\make_demo_portfolio.py    # tạo danh mục mặc định data_sample\demo_portfolio.csv theo giá mới nhất
     python scripts\portfolio_report.py       # in báo cáo sức khỏe danh mục ra màn hình
-    python scripts\export_sample.py          # xuất dữ liệu mẫu data_sample\sample.db cho người chấm
-    streamlit run src\app\main.py            # mở ứng dụng (chọn "Dữ liệu trực tiếp (SSI)")
+    python scripts\export_sample.py          # xuất bản dữ liệu SSI data_sample\sample.db để đưa lên GitHub
+    streamlit run src\app\main.py            # mở ứng dụng
     python scripts\check_ssi_connection.py   # kiểm tra kết nối và định dạng dữ liệu SSI
     python scripts\try_fetch.py              # tải thử 3 năm dữ liệu FPT, VN-Index và báo cáo chất lượng
     python -m pytest                         # chạy kiểm thử tự động (không cần mạng, không cần key)
 
-Lần đầu `update_data.py` tải đủ 3 năm; các lần sau chỉ tải phần mới. Nên chạy sau 15:00 để có giá đóng cửa cuối phiên.
+Lần đầu `update_data.py` tải đủ 3 năm; các lần sau chỉ tải phần mới, kèm tổng hợp thị trường HOSE của 20 phiên gần
+nhất. Nên chạy sau 15:00 để có giá đóng cửa cuối phiên.
 
 ## Cấu trúc mã nguồn
     src/config.py            cấu hình chung: đường dẫn, múi giờ, tham số SSI
@@ -54,8 +61,10 @@ Lần đầu `update_data.py` tải đủ 3 năm; các lần sau chỉ tải ph�
     src/finance/risk.py           biến động, beta, VaR lịch sử, mức sụt giảm tối đa
     src/finance/stress.py         kịch bản mọi mã giảm sàn (biên độ, bước giá)
     src/finance/health.py         tổng hợp báo cáo sức khỏe, ngưỡng và lời giải thích
-    src/app/main.py               ứng dụng Streamlit (giao diện)
-    src/app/charts.py             các biểu đồ Plotly
+    src/app/main.py               ứng dụng Streamlit: chọn nguồn dữ liệu, tính toán chung, menu điều hướng, khung Dữ liệu
+    src/app/views.py              nội dung từng trang
+    src/app/charts.py             các biểu đồ Plotly (có tương tác: rê chuột, phóng to, thanh trượt thời gian)
+    src/app/ui.py                 biểu tượng, nhãn tiếng Việt, quy tắc "dữ liệu đã mới chưa"
     tests/                   kiểm thử tự động
     scripts/                 các script chạy thủ công
 

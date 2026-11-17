@@ -68,7 +68,9 @@ def test_first_run_downloads_full_history(storage):
     assert stock_call[2] == TODAY - timedelta(days=365)    # tải đủ 1 năm
     assert results[1].missing_sessions == 0
     assert len(storage.load_market_summary("HOSE")) == 1
-    assert len(storage.load_fetch_log()) == 2
+    log = storage.load_fetch_log()
+    assert len(log) == 3                                    # chỉ số + 1 mã + tổng hợp thị trường
+    assert set(log["dataset"]) == {"index_daily", "stock_daily", "market_summary"}
 
 
 def test_second_run_is_incremental(storage):
@@ -114,3 +116,38 @@ def test_history_was_adjusted_ignores_last_stored_session():
     assert history_was_adjusted(stored, fresh, tolerance=0.001) is False
     fresh_adjusted = fresh.assign(close=[49000.0, 49400.0])
     assert history_was_adjusted(stored, fresh_adjusted, tolerance=0.001) is True
+
+
+class HistoryClient(FakeClient):
+    """Client giả có lịch sử tổng hợp thị trường: trả đúng ngày được hỏi."""
+
+    def __init__(self):
+        super().__init__()
+        self.summary_calls = []
+
+    def get_market_summary(self, board, trading_date=None):
+        self.summary_calls.append(trading_date)
+        return {"tradingDate": trading_date.strftime("%Y/%m/%d"), "indexValue": "1700",
+                "netPurchasesForeignValue": "-1000000000"}
+
+
+def test_market_summary_backfills_recent_sessions_once(storage):
+    client = HistoryClient()
+    DataUpdater(client, storage, history_years=1, today=TODAY).run(["FPT"])
+    summary = storage.load_market_summary("HOSE")
+    assert len(summary) == 20                               # đủ 20 phiên gần nhất
+    assert summary["trading_date"].max() == TODAY.isoformat()
+    assert client.summary_calls[0] == TODAY                 # hỏi từ phiên mới nhất trở về trước
+
+    client.summary_calls.clear()
+    DataUpdater(client, storage, history_years=1, today=TODAY).run(["FPT"])
+    assert client.summary_calls == []                       # đã đủ thì không hỏi lại
+
+
+def test_market_summary_stops_when_history_not_supported(storage):
+    """FakeClient luôn trả ngày 16/11: hỏi ngày cũ hơn mà nhận ngày khác thì dừng, không ghi sai ngày."""
+    DataUpdater(FakeClient(), storage, history_years=1, today=TODAY).run(["FPT"])
+    summary = storage.load_market_summary("HOSE")
+    assert summary["trading_date"].tolist() == ["2026-11-16"]
+    log = storage.load_fetch_log()
+    assert "dừng" in log.loc[log["dataset"] == "market_summary", "message"].iloc[0]

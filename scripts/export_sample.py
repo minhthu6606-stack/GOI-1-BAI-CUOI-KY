@@ -1,9 +1,9 @@
 """
-Xuất bộ DỮ LIỆU MẪU cho người chấm: chép dữ liệu THẬT đã tải từ SSI của các mã trong
-danh mục minh họa và VN-Index sang data_sample/sample.db (file này được đưa lên GitHub).
+Xuất bản dữ liệu SSI lưu kèm mã nguồn: chép dữ liệu THẬT đã tải từ SSI của các mã trong
+danh mục mặc định và VN-Index sang data_sample/sample.db (file này được đưa lên GitHub).
 
-Nhờ đó ứng dụng chạy được ngay ở chế độ "Dữ liệu mẫu" mà không cần API key SSI.
-Đây là dữ liệu thật đã ghi lại, không phải dữ liệu giả; ứng dụng hiển thị rõ ngày chốt dữ liệu.
+Máy không có kho data/ (vd máy người chấm, không có API key) sẽ tự dùng bản này, nên ứng dụng
+chạy được ngay. Đây là dữ liệu thật đã ghi lại, không phải dữ liệu giả; ứng dụng ghi rõ phiên chốt dữ liệu.
 
 Cách chạy (sau khi đã chạy update_data.py và make_demo_portfolio.py):
     python scripts/export_sample.py

@@ -151,7 +151,11 @@ class DataUpdater:
     def update_securities(self, max_age_days: int = config.SECURITIES_MAX_AGE_DAYS) -> int:
         """Làm mới danh sách mã nếu chưa có hoặc đã cũ hơn `max_age_days` ngày. Trả về số mã đã ghi."""
         updated_at = self.storage.securities_updated_at()
-        if updated_at and datetime.fromisoformat(updated_at).date() > self.today - timedelta(days=max_age_days):
+        try:
+            fresh = bool(updated_at) and datetime.fromisoformat(updated_at).date() > self.today - timedelta(days=max_age_days)
+        except ValueError:
+            fresh = False  # dấu thời gian hỏng thì coi như đã cũ, tải lại danh sách mã
+        if fresh:
             return 0
         total = 0
         for board in config.BOARDS:
@@ -161,19 +165,51 @@ class DataUpdater:
                 logger.error("Không tải được danh sách mã sàn %s: %s", board, exc)
         return total
 
-    def update_market_summary(self, board: str = "HOSE") -> bool:
-        """Lưu tổng hợp thị trường của ngày hôm nay (độ rộng, khối ngoại toàn sàn)."""
-        try:
-            record = self.client.get_market_summary(board)
-        except SSIError as exc:
-            logger.error("Không tải được tổng hợp thị trường %s: %s", board, exc)
-            return False
-        if not record:
-            return False
-        trading_date = (pd.to_datetime(record.get("tradingDate"), format="%Y/%m/%d", errors="coerce"))
-        day = trading_date.date().isoformat() if pd.notna(trading_date) else self.today.isoformat()
-        self.storage.save_market_summary(board, record, trading_date=day, fetched_at=now_vn())
-        return True
+    def update_market_summary(self, board: str = "HOSE",
+                              sessions: int = config.MARKET_SUMMARY_SESSIONS,
+                              index_code: str = config.MARKET_INDEX) -> int:
+        """Lưu tổng hợp thị trường (độ rộng, khối ngoại toàn sàn) cho `sessions` phiên gần nhất còn thiếu.
+
+        Lịch phiên lấy từ VN-Index đã lưu. Chỉ hỏi SSI những phiên chưa có trong kho, từ mới đến cũ.
+        Nếu SSI trả về một ngày khác ngày đã hỏi (tức là endpoint không hỗ trợ ngày đó), dừng lại để
+        không ghi sai ngày. Trả về số phiên đã lưu thêm; kết quả được ghi vào nhật ký fetch_log.
+        """
+        started_at = now_vn()
+        calendar = self.storage.trading_calendar(index_code)[-sessions:]
+        stored = set(self.storage.load_market_summary(board)["trading_date"])
+        wanted = [day for day in reversed(calendar) if day not in stored]
+        if not calendar:
+            wanted = [self.today.isoformat()]  # chưa có lịch phiên: chỉ hỏi ngày hôm nay
+        saved, status, message = 0, "ok", ""
+        for day in wanted:
+            try:
+                record = self.client.get_market_summary(board, date.fromisoformat(day))
+            except SSIError as exc:
+                status, message = "error", str(exc)
+                logger.error("Không tải được tổng hợp thị trường %s ngày %s: %s", board, day, exc)
+                break
+            if not record:
+                continue
+            parsed = pd.to_datetime(record.get("tradingDate"), format="%Y/%m/%d", errors="coerce")
+            returned = parsed.date().isoformat() if pd.notna(parsed) else day
+            if returned != day:
+                if returned not in stored:
+                    self.storage.save_market_summary(board, record, trading_date=returned, fetched_at=now_vn())
+                    stored.add(returned)
+                    saved += 1
+                message = f"SSI trả ngày {returned} khi hỏi ngày {day}; dừng tải các ngày cũ hơn"
+                break
+            self.storage.save_market_summary(board, record, trading_date=day, fetched_at=now_vn())
+            stored.add(day)
+            saved += 1
+        if wanted:
+            self.storage.log_fetch({
+                "run_id": self.run_id, "started_at": started_at, "finished_at": now_vn(),
+                "symbol": board, "dataset": "market_summary", "mode": "incremental" if len(wanted) < sessions else "full",
+                "date_from": min(wanted), "date_to": max(wanted), "rows_received": saved, "rows_kept": saved,
+                "rows_flagged": 0, "missing_sessions": 0, "status": status, "message": message,
+            })
+        return saved
 
     def run(self, symbols: list[str], index_code: str = config.MARKET_INDEX,
             with_market_summary: bool = True) -> list[UpdateResult]:

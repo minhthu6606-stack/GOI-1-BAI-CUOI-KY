@@ -66,7 +66,8 @@ def _copy_daily(target: Storage, table: str, frame) -> int:
 def main() -> None:
     if not config.DB_PATH.exists():
         sys.exit("[LỖI] Chưa có kho dữ liệu. Hãy chạy: python scripts/update_data.py")
-    symbols = load_portfolio_csv(PORTFOLIO_CSV).symbols if PORTFOLIO_CSV.exists() else config.DEFAULT_SYMBOLS
+    portfolio = load_portfolio_csv(PORTFOLIO_CSV).symbols if PORTFOLIO_CSV.exists() else config.DEFAULT_SYMBOLS
+    symbols = list(dict.fromkeys(portfolio + config.TRACKED_SYMBOLS))  # danh mục mặc định + các mã của dải giá
     with Storage() as source:
         counts = export_sample(source, SAMPLE_DB, symbols, config.MARKET_INDEX)
     size_kb = SAMPLE_DB.stat().st_size / 1024

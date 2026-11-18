@@ -1,5 +1,5 @@
 """
-Ứng dụng Streamlit "Khám Sức Khỏe Danh Mục".
+Ứng dụng Streamlit "Vốn Ổn" - khám sức khỏe danh mục cổ phiếu ("Khám vốn mỗi phiên, đầu tư an yên.").
 
 Cách chạy (trong thư mục gốc của repo, đã kích hoạt .venv):
     streamlit run src/app/main.py
@@ -38,9 +38,11 @@ from src.finance.portfolio import CASH_SYMBOL, PortfolioError, build_portfolio  
 from src.ssi_api.client import SSIClient, SSIError  # noqa: E402
 
 ASSETS = Path(__file__).resolve().parent / "assets"
-st.set_page_config(page_title=config.APP_NAME, page_icon=str(ASSETS / "logo_icon.svg"), layout="wide")
-st.logo(str(ASSETS / "logo.svg"), size="large", icon_image=str(ASSETS / "logo_icon.svg"))
-style.inject_css()
+st.set_page_config(page_title=f"{config.APP_NAME} · {config.APP_DESCRIPTOR}", page_icon=str(ASSETS / "logo_icon.svg"), layout="wide")
+DARK = bool(st.session_state.get("dark_mode", False))   # chọn ở mục "Cài đặt" cuối thanh bên; mặc định: sáng
+st.logo(str(ASSETS / ("logo_dark.svg" if DARK else "logo_light.svg")), size="large",
+        icon_image=str(ASSETS / "logo_icon.svg"))
+st.html(style.theme_css(DARK))
 logger = logging.getLogger("app")
 
 
@@ -61,6 +63,22 @@ def cached_store_info(db_path: str, db_mtime: float) -> dict[str, pd.DataFrame]:
             "fetch_log": storage.load_fetch_log(limit=30),
             "market_summary": storage.load_market_summary("HOSE").tail(config.MARKET_SUMMARY_SESSIONS),
         }
+
+
+@st.cache_data(show_spinner=False)
+def cached_ticker_quotes(db_path: str, db_mtime: float, symbols: tuple[str, ...]) -> list[tuple[str, float, float]]:
+    """Giá đóng cửa phiên mới nhất và % thay đổi so với phiên trước của các mã trên dải giá chạy ngang."""
+    quotes = []
+    with Storage(db_path) as storage:
+        for symbol in symbols:
+            frame = storage.load_daily("stock_daily", symbol).tail(2)
+            if frame.empty or pd.isna(frame["close"].iloc[-1]):
+                continue
+            change = pd.to_numeric(frame["price_change_pct"].iloc[-1], errors="coerce") / 100
+            if pd.isna(change) and len(frame) == 2:  # thiếu % thay đổi: tính từ 2 phiên gần nhất
+                change = frame["close"].iloc[-1] / frame["close"].iloc[-2] - 1
+            quotes.append((symbol, float(frame["close"].iloc[-1]), float(change)))
+    return quotes
 
 
 @st.cache_resource
@@ -103,8 +121,13 @@ def check_ssi_connection() -> None:
         st.session_state.ssi_status = ("error", str(exc))
 
 
+def update_symbols(portfolio_symbols: list[str]) -> list[str]:
+    """Các mã cần cập nhật: mã trong danh mục + danh mục mặc định + các mã của dải giá chạy ngang."""
+    return list(dict.fromkeys(portfolio_symbols + config.TRACKED_SYMBOLS))
+
+
 def run_update(symbols: list[str], reason: str = "") -> None:
-    """Cập nhật kho data/portfolio.db từ SSI cho các mã trong danh mục (chỉ tải phần mới)."""
+    """Cập nhật kho data/portfolio.db từ SSI (chỉ tải phần mới; mã chưa có thì tải đủ lịch sử)."""
     try:
         client = SSIClient.from_env()
     except SSIError as exc:
@@ -170,7 +193,7 @@ def reset_portfolio() -> None:
 
 def build_context() -> views.AppContext:
     has_key = api_key_available()
-    ctx = views.AppContext(live=config.DB_PATH.exists(), has_key=has_key, up_to_date=False,
+    ctx = views.AppContext(live=config.DB_PATH.exists(), has_key=has_key, up_to_date=False, dark=DARK,
                            save_portfolio=save_portfolio, reset_portfolio=reset_portfolio)
     try:
         rows = pd.concat([state.portfolio_rows, pd.DataFrame({"symbol": [CASH_SYMBOL], "quantity": [state.cash]})],
@@ -188,7 +211,7 @@ def build_context() -> views.AppContext:
         attempts = auto_update_attempts()
         if not is_up_to_date(last_fetched, now_vn()) and session not in attempts:
             attempts.add(session)
-            run_update(symbols, reason="Có phiên mới. ")
+            run_update(update_symbols(symbols), reason="Có phiên mới. ")
 
     db_path = config.DB_PATH if ctx.live else config.SAMPLE_DB_PATH
     if not db_path.exists():
@@ -242,38 +265,40 @@ navigation = st.navigation({
 # ====================================================================== khung "Dữ liệu" ở thanh bên
 
 def data_panel() -> None:
+    """Khung "Dữ liệu" gọn: nguồn, phiên mới nhất, kết nối (chấm màu) + 2 nút; mục "Cài đặt" chọn sáng/tối."""
     market, (status_kind, status_text) = ctx.market, state.ssi_status
     last_session = format_date(market.last_trading_date) if market else "chưa có"
-    st.markdown("**Dữ liệu**")
-    if ctx.live:
-        st.markdown(f":blue-badge[{ICONS['source']} SSI FastConnect API]")
-        if ctx.up_to_date:
-            st.markdown(f":green-badge[{ICONS['session']} Phiên {last_session} · mới nhất]")
-        else:
-            st.markdown(f":orange-badge[{ICONS['session']} Phiên {last_session} · có thể đã có phiên mới]")
-    elif market:
-        st.markdown(f":gray-badge[{ICONS['source']} Bản lưu kèm mã nguồn (SSI)]")
-        st.markdown(f":gray-badge[{ICONS['session']} Chốt đến phiên {last_session}]")
+    if not market:
+        rows = [("red", "Chưa có dữ liệu trên máy này")]
+    elif ctx.live:
+        rows = [("violet", "SSI FastConnect API"),
+                ("green", f"Phiên {last_session} · mới nhất") if ctx.up_to_date
+                else ("orange", f"Phiên {last_session} · có thể có phiên mới")]
     else:
-        st.markdown(f":red-badge[{ICONS['source']} Chưa có dữ liệu trên máy này]")
-    if market:
-        st.caption(f"Tải từ SSI lúc {format_time(market.last_fetched_at)} (giờ Việt Nam)")
-
+        rows = [("violet", "Bản dữ liệu SSI lưu kèm mã nguồn"), ("gray", f"Chốt đến phiên {last_session}")]
     if status_kind == "ok":
-        st.markdown(f":green-badge[{ICONS['connection']} Kết nối SSI tốt · {status_text}]")
+        rows.append(("green", f"Kết nối SSI tốt · {status_text}"))
     elif status_kind == "error":
-        st.markdown(f":red-badge[{ICONS['connection']} Lỗi kết nối SSI]")
+        rows.append(("red", "Lỗi kết nối SSI (xem thông báo)"))
     elif ctx.has_key:
-        st.markdown(f":gray-badge[{ICONS['connection']} Chưa kiểm tra kết nối]")
+        rows.append(("gray", "Chưa kiểm tra kết nối"))
     else:
-        st.markdown(f":gray-badge[{ICONS['connection']} Máy này chưa có API key SSI]")
+        rows.append(("gray", "Máy này chưa có API key SSI"))
+    note = f"Tải từ SSI lúc {format_time(market.last_fetched_at)} (giờ VN)" if market else "Chưa tải lần nào"
+    st.html(style.data_panel_html(rows, note))
 
-    if st.button("Kiểm tra kết nối", icon=ICONS["check"], width="stretch"):
+    col_a, col_b = st.columns(2)
+    if col_a.button("Kiểm tra", icon=ICONS["check"], width="stretch", help="Kiểm tra kết nối tới SSI"):
         check_ssi_connection()
         st.rerun()
-    if st.button("Cập nhật dữ liệu", icon=ICONS["update"], type="primary", width="stretch"):
-        run_update(ctx.portfolio.symbols if ctx.portfolio else config.DEFAULT_SYMBOLS)
+    if col_b.button("Cập nhật", icon=ICONS["update"], type="primary", width="stretch",
+                    help="Tải phiên mới nhất từ SSI (cần API key)"):
+        run_update(update_symbols(ctx.portfolio.symbols if ctx.portfolio else []))
         st.rerun()
+
+    st.markdown("**Cài đặt**")
+    st.toggle("Giao diện tối", key="dark_mode", help="Mặc định là giao diện sáng; lựa chọn giữ nguyên khi chuyển trang.")
+    st.html(style.theme_sync_script(DARK), unsafe_allow_javascript=True)
 
 
 with st.sidebar:
@@ -281,22 +306,16 @@ with st.sidebar:
 
 # Dải giá chạy ngang ở đầu mọi trang: VN-Index và các mã trong danh mục, phiên mới nhất trong kho
 def ticker_items() -> list[tuple[str, float, float]]:
+    """VN-Index, các mã trong danh mục, rồi các mã vốn hóa lớn (TICKER_SYMBOLS) - đúng số liệu phiên mới nhất."""
     market = ctx.market
     if market is None or market.index_close.empty:
         return []
     index = market.index_close
     items = [("VN-Index", float(index.iloc[-1]),
               float(index.iloc[-1] / index.iloc[-2] - 1) if len(index) >= 2 else float("nan"))]
-    if not market.latest.empty:
-        for symbol, row in market.latest.iterrows():
-            close = pd.to_numeric(row.get("close"), errors="coerce")
-            if pd.isna(close):
-                continue
-            change = pd.to_numeric(row.get("price_change_pct"), errors="coerce") / 100
-            if pd.isna(change) and symbol in market.close.columns:  # thiếu % thay đổi: tính từ 2 phiên gần nhất
-                series = market.close[symbol].dropna()
-                change = series.iloc[-1] / series.iloc[-2] - 1 if len(series) >= 2 else float("nan")
-            items.append((str(symbol), float(close), float(change)))
+    db_path = config.DB_PATH if ctx.live else config.SAMPLE_DB_PATH
+    symbols = list(dict.fromkeys((ctx.portfolio.symbols if ctx.portfolio else []) + config.TICKER_SYMBOLS))
+    items += cached_ticker_quotes(str(db_path), db_path.stat().st_mtime, tuple(symbols))
     return items
 
 

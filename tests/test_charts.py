@@ -50,12 +50,21 @@ def test_market_charts():
     assert len(charts.breadth_chart(summary).data) == 2
 
 
-def test_diversity_gauge_and_ticker():
+def test_diversity_scale_dark_and_ticker():
     from src.app import charts
     from src.app.style import ticker_html
-    gauge = charts.diversity_gauge(4.8)
-    assert gauge.data[0].value == 4.8
-    assert [step["range"][1] for step in gauge.data[0].gauge.steps][:2] == [5, 10]
+    scale = charts.diversity_scale(4.8)
+    assert [t.base[0] for t in scale.data[:3]] == [0, 5, 10]          # 3 vùng bắt đầu ở 0, 5, 10 mã
+    assert scale.data[3].x[0] == 4.8                                  # điểm đánh dấu danh mục
+    dark = charts.apply_dark(scale)
+    assert dark.data[3].marker.color == charts.DARK_COLORS[charts.SERIES[0]]
     html = ticker_html([("VN-Index", 1736.89, -0.0061), ("FPT", 98500, 0.012), ("VCB", 60000, 0.0)], "Phiên 16/11/2026")
     assert "1.736,89" in html and "▼ 0,61%" in html and "▲ 1,20%" in html and "98.500" in html
     assert html.count("FPT") == 2          # nội dung nhân đôi để chạy vòng liền mạch
+
+
+def test_theme_css_and_script():
+    from src.app.style import hero_art, theme_css, theme_sync_script
+    assert "--card-bg: #ffffff" in theme_css(False) and "--card-bg: #1b1630" in theme_css(True)
+    assert '"Dark"' in theme_sync_script(True) and '"Light"' in theme_sync_script(False)
+    assert 'fill="#ffffff"' in hero_art(False) and '"CARD"' not in hero_art(True)

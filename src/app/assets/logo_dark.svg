@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="190" height="56" viewBox="0 0 190 56">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8a5cf0"/><stop offset="1" stop-color="#5a2fc2"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe27a"/><stop offset="1" stop-color="#f2a900"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="4" width="48" height="48" rx="14" fill="url(#g)"/>
+  <polyline points="9,30 17,30 21,21 27,39 32,25 35,30 43,30" fill="none" stroke="#ffffff" stroke-width="3.2"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="42" cy="13" r="5.5" fill="url(#gold)"/>
+  <text x="62" y="37" font-family="Montserrat, Segoe UI, Arial, sans-serif" font-size="28" font-weight="800"
+        fill="#f3effc">Vốn <tspan fill="#e0a000">Ổn</tspan></text>
+</svg>

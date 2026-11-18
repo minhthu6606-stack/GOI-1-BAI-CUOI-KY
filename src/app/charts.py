@@ -14,14 +14,34 @@ trên nền trắng, mọi màu có độ tương phản >= 3:1):
 """
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 import plotly.graph_objects as go
 
-SERIES = ["#6d3fd9", "#b98000", "#1a9e8f", "#2f6fd6", "#c2336b"]
+SERIES = ["#6d3fd9", "#f2b100", "#1a9e8f", "#2f6fd6", "#c2336b"]
 NEUTRAL = "#9a93ab"
 UP, DOWN = "#16a34a", "#dc2626"
 GRID = "rgba(109,63,217,0.08)"
-FONT = "Be Vietnam Pro, sans-serif"
+FONT = "Montserrat, sans-serif"
+
+# Giao diện tối: thay từng màu của giao diện sáng bằng màu tương ứng (bảng màu tối cũng đã chạy bộ kiểm tra
+# cho người mù màu và độ tương phản trên nền tối).
+DARK_COLORS = {
+    "#6d3fd9": "#8a66f2", "#f2b100": "#bb8b12", "#1a9e8f": "#22a895", "#2f6fd6": "#4f7fe0", "#c2336b": "#d6588a",
+    "#16a34a": "#22c55e", "#dc2626": "#ef4444", "#9a93ab": "#6f6888",
+    "#fde2e2": "#4a1f2a", "#fff1d6": "#4a3a14", "#dcf5e4": "#163d2a",
+    "109,63,217": "138,102,242", "194,51,107": "214,88,138", "rgba(109,63,217,0.08)": "rgba(185,162,255,0.10)",
+    '"bgcolor":"white"': '"bgcolor":"#221b3d"', "#1f1937": "#ece8f7", "#d9cdf5": "#3a3163", "#8b7bb8": "#6f6390",
+}
+
+
+def apply_dark(fig: go.Figure) -> go.Figure:
+    """Đổi màu một biểu đồ sang giao diện tối (thay chuỗi màu trong cấu hình của biểu đồ)."""
+    text = fig.to_json()
+    for light, dark in DARK_COLORS.items():
+        text = text.replace(light, dark)
+    return go.Figure(json.loads(text))
 PORTFOLIO_LABEL = "Danh mục (tỷ trọng hiện tại)"
 INDEX_LABEL = "VN-Index"
 
@@ -251,21 +271,35 @@ def breadth_chart(summary: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def diversity_gauge(effective_n: float, good: float = 10, concentrated: float = 5) -> go.Figure:
-    """Đồng hồ "mức đa dạng hóa": số mã hiệu dụng trên thang 3 vùng theo ngưỡng Evans & Archer (1968)."""
-    top = max(15.0, float(effective_n) + 2 if effective_n == effective_n else 15.0)
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number", value=effective_n,
-        number=dict(suffix=" mã", valueformat=".1f", font=dict(size=40, family=FONT, color="#1f1937")),
-        gauge=dict(
-            shape="angular", axis=dict(range=[0, top], tickvals=[0, concentrated, good, top], tickwidth=1),
-            bar=dict(color=SERIES[0], thickness=0.28),
-            steps=[dict(range=[0, concentrated], color="#fde2e2"), dict(range=[concentrated, good], color="#fff1d6"),
-                   dict(range=[good, top], color="#dcf5e4")],
-            threshold=dict(line=dict(color="#16a34a", width=3), thickness=0.8, value=good),
-            borderwidth=0,
-        ),
-    ))
-    fig.update_layout(height=260, margin=dict(l=25, r=25, t=50, b=10), separators=",.", font=dict(family=FONT),
-                      title=dict(text="Mức đa dạng hóa (số mã hiệu dụng)", font=dict(size=15)))
+def diversity_scale(effective_n: float, good: float = 10, concentrated: float = 5) -> go.Figure:
+    """Thang "mức đa dạng hóa": 3 vùng theo ngưỡng Evans & Archer (1968) và vị trí danh mục của bạn.
+
+    Dễ đọc hơn đồng hồ: một thanh ngang chia 3 vùng có ghi chữ, mũi tên chỉ vào số mã hiệu dụng của bạn.
+    """
+    top = max(15.0, float(effective_n) + 2) if effective_n == effective_n else 15.0
+    zones = [(0, concentrated, "#fde2e2", "Tập trung cao"), (concentrated, good, "#fff1d6", "Trung bình"),
+             (good, top, "#dcf5e4", "Đa dạng tốt")]
+    fig = go.Figure()
+    for low, high, color, label in zones:
+        fig.add_trace(go.Bar(
+            x=[high - low], y=[""], base=[low], orientation="h", marker=dict(color=color, cornerradius=10),
+            text=[f"<b>{label}</b>"], textposition="inside", insidetextanchor="middle",
+            textfont=dict(color="#1f1937", size=13), hovertemplate=f"{label}: %{{base:.0f}}–{high:.0f} mã<extra></extra>",
+            showlegend=False, width=0.55,
+        ))
+    if effective_n == effective_n:
+        value = f"{effective_n:.1f}".replace(".", ",")
+        fig.add_trace(go.Scatter(
+            x=[effective_n], y=[""], mode="markers", marker=dict(symbol="diamond", size=20, color=SERIES[0],
+                                                                  line=dict(color="white", width=2)),
+            hovertemplate=f"Danh mục của bạn: {value} mã<extra></extra>", showlegend=False,
+        ))
+        fig.add_annotation(x=effective_n, y=0.42, yref="paper", text=f"<b>Bạn: {value} mã</b>", showarrow=True,
+                           arrowhead=0, ay=-34, ax=0, font=dict(color=SERIES[0], size=15), arrowcolor=SERIES[0])
+    fig.update_layout(height=230, margin=dict(l=10, r=10, t=60, b=30), barmode="overlay", separators=",.",
+                      font=dict(family=FONT), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                      title=dict(text="Mức đa dạng hóa (số mã hiệu dụng)", font=dict(size=15)),
+                      hoverlabel=dict(bgcolor="white", bordercolor="#d9cdf5", font=dict(family=FONT, color="#1f1937")))
+    fig.update_xaxes(range=[0, top], tickvals=[0, concentrated, good, top], showgrid=False, title_text="Số mã hiệu dụng")
+    fig.update_yaxes(showticklabels=False, showgrid=False)
     return fig

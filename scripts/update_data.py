@@ -2,7 +2,7 @@
 Cập nhật kho dữ liệu SQLite từ SSI.
 
 Cách chạy (trong thư mục gốc của repo, đã kích hoạt .venv):
-    python scripts/update_data.py                       # các mã của danh mục mặc định
+    python scripts/update_data.py                       # danh mục mặc định + các mã của dải giá chạy ngang
     python scripts/update_data.py --symbols FPT ACB     # chỉ định mã khác
     python scripts/update_data.py --status              # chỉ xem kho đang có gì, không tải
 
@@ -47,7 +47,8 @@ def print_status(storage: Storage) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Cập nhật kho dữ liệu từ SSI FastConnect")
-    parser.add_argument("--symbols", nargs="+", default=config.DEFAULT_SYMBOLS, help="danh sách mã cổ phiếu")
+    parser.add_argument("--symbols", nargs="+", default=config.TRACKED_SYMBOLS,
+                        help="danh sách mã cổ phiếu (mặc định: danh mục mặc định + các mã của dải giá)")
     parser.add_argument("--status", action="store_true", help="chỉ in tình trạng kho, không tải dữ liệu")
     args = parser.parse_args()
 

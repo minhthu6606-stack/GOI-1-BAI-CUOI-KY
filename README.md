@@ -1,4 +1,6 @@
-# Khám Sức Khỏe Danh Mục
+# Vốn Ổn – khám sức khỏe danh mục cổ phiếu
+
+> *Khám vốn mỗi phiên, đầu tư an yên.*
 
 Đồ án cá nhân cuối kỳ – Gói phần mềm ứng dụng cho tài chính 1 (UEL).
 Sản phẩm: công cụ kiểm tra sức khỏe danh mục cổ phiếu cho nhà đầu tư cá nhân.
@@ -21,8 +23,10 @@ Máy chưa có kho `data/` thì ứng dụng tự dùng bản dữ liệu SSI l�
 dữ liệu THẬT tải từ SSI, chốt đến một phiên; thanh bên ghi rõ phiên chốt. Không cần chọn gì thêm.
 
 ## Giao diện
-Tông tím - vàng trên nền sáng. Mở ứng dụng là **Trang chủ** (giới thiệu sản phẩm, hình minh họa, 4 điều được kiểm
-tra, cách dùng); đầu mỗi trang có dải giá chạy ngang của VN-Index và các mã trong danh mục (phiên mới nhất trong kho).
+Tông tím - vàng gold, phông Montserrat. Mặc định giao diện sáng; mục **Cài đặt → Giao diện tối** ở cuối thanh bên để
+chuyển sáng/tối. Mở ứng dụng là **Trang chủ** (giới thiệu, hình minh họa động, 4 điều được kiểm tra, 3 bước sử dụng,
+câu hỏi thường gặp). Đầu mỗi trang có dải giá chạy ngang: VN-Index, các mã trong danh mục và 10 cổ phiếu vốn hóa lớn
+(`TICKER_SYMBOLS` trong `src/config.py`), lấy giá đóng cửa phiên mới nhất trong kho.
 Thanh bên trái là menu: **Trang chủ**, **Nhập danh mục**, **Tổng quan** (kết luận và 6 chỉ số chính), **Cảnh báo**,
 **Phân bổ**, **Rủi ro**, **Thanh khoản & giảm sàn**, **Thị trường**, **Phương pháp & dữ liệu**. Dưới menu là khung
 **Dữ liệu**: nguồn, phiên mới nhất, thời điểm tải, trạng thái kết nối và hai nút *Kiểm tra kết nối*, *Cập nhật dữ liệu*.
@@ -46,8 +50,9 @@ Máy có API key và có kho `data/`: mở ứng dụng sau 15:00 ngày làm vi�
     python scripts\try_fetch.py              # tải thử 3 năm dữ liệu FPT, VN-Index và báo cáo chất lượng
     python -m pytest                         # chạy kiểm thử tự động (không cần mạng, không cần key)
 
-Lần đầu `update_data.py` tải đủ 3 năm; các lần sau chỉ tải phần mới, kèm tổng hợp thị trường HOSE của 20 phiên gần
-nhất. Nên chạy sau 15:00 để có giá đóng cửa cuối phiên.
+Lần đầu `update_data.py` tải đủ 3 năm cho 16 mã (6 mã danh mục mặc định + 10 mã của dải giá, khoảng 2–3 phút);
+các lần sau chỉ tải phần mới, kèm tổng hợp thị trường HOSE của 20 phiên gần nhất. Nên chạy sau 15:00 để có giá đóng
+cửa cuối phiên.
 
 ## Cấu trúc mã nguồn
     src/config.py            cấu hình chung: đường dẫn, múi giờ, tham số SSI
@@ -68,8 +73,8 @@ nhất. Nên chạy sau 15:00 để có giá đóng cửa cuối phiên.
     src/app/charts.py             các biểu đồ Plotly (có tương tác: rê chuột, phóng to, thanh trượt thời gian)
     src/app/ui.py                 biểu tượng, nhãn tiếng Việt, quy tắc "dữ liệu đã mới chưa"
     src/app/style.py              CSS bổ sung, dải giá chạy ngang, hình minh họa trang chủ (SVG tự vẽ)
-    src/app/assets/               logo của sản phẩm (SVG)
-    .streamlit/config.toml        màu, phông chữ (Be Vietnam Pro), bo góc của giao diện
+    src/app/assets/               logo của sản phẩm (SVG, bản sáng và bản tối)
+    .streamlit/config.toml        màu giao diện sáng/tối, phông chữ (Montserrat), bo góc
     tests/                   kiểm thử tự động
     scripts/                 các script chạy thủ công
 

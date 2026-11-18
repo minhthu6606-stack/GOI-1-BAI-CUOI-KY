@@ -8,12 +8,13 @@ from __future__ import annotations
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-# ----- Sản phẩm (hiển thị ở trang Tổng quan) -----
-APP_NAME = "Khám Sức Khỏe Danh Mục"
-APP_TAGLINE = "Kiểm tra rủi ro danh mục cổ phiếu Việt Nam bằng dữ liệu thật từ SSI"
-APP_GOAL = ("Bạn nhập các mã cổ phiếu đang nắm, ứng dụng cho biết danh mục có đang dồn quá nhiều tiền vào "
-            "một mã hay một ngành không, cần bao lâu để bán hết khi cần tiền gấp, và một phiên thị trường xấu "
-            "có thể làm bạn mất khoảng bao nhiêu")
+# ----- Sản phẩm (hiển thị ở Trang chủ, logo và tiêu đề tab trình duyệt) -----
+APP_NAME = "Vốn Ổn"
+APP_TAGLINE = "Khám vốn mỗi phiên, đầu tư an yên."      # slogan
+APP_DESCRIPTOR = "Khám sức khỏe danh mục cổ phiếu"     # mô tả ngắn đi kèm tên
+APP_GOAL = ("Bạn nhập những mã cổ phiếu đang có, ứng dụng chấm sức khỏe danh mục theo 4 câu hỏi: có đang dồn "
+            "quá nhiều tiền vào một mã hay một ngành không, cần tiền gấp thì bán hết mất mấy ngày, danh mục lên "
+            "xuống mạnh đến đâu so với thị trường, và một phiên giảm sàn có thể làm bạn mất bao nhiêu tiền")
 APP_USERS = ("Nhà đầu tư cá nhân mới tham gia thị trường, đang nắm khoảng 3–10 mã cổ phiếu và muốn tự kiểm tra "
              "rủi ro trước khi quyết định mua thêm hay cơ cấu lại")
 
@@ -43,6 +44,10 @@ SSI_SUMMARY_MAX_DAYS = 120
 
 # ----- Cập nhật dữ liệu -----
 DEFAULT_SYMBOLS = ["FPT", "HPG", "VCB", "MBB", "SSI", "MWG"]  # các mã của danh mục mặc định
+# Các cổ phiếu vốn hóa lớn thêm vào dải giá chạy ngang (thuộc rổ VN30, nhiều ngành). Tải đủ lịch sử như mọi mã
+# khác, nên người dùng thêm các mã này vào danh mục là phân tích được ngay.
+TICKER_SYMBOLS = ["ACB", "BID", "CTG", "TCB", "VPB", "VNM", "MSN", "VIC", "VHM", "GAS"]
+TRACKED_SYMBOLS = DEFAULT_SYMBOLS + [s for s in TICKER_SYMBOLS if s not in DEFAULT_SYMBOLS]
 MARKET_INDEX = "VNINDEX"         # chỉ số thị trường: dùng làm lịch giao dịch chuẩn và để tính beta
 HISTORY_YEARS = 3                # độ dài lịch sử tải lần đầu
 OVERLAP_DAYS = 14                # mỗi lần cập nhật tải lại 14 ngày gần nhất để phát hiện giá lịch sử bị điều chỉnh

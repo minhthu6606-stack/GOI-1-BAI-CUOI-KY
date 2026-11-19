@@ -7,9 +7,10 @@ Toàn bộ biểu tượng gom ở ICONS: muốn thay bằng biểu tượng t�
 """
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import datetime
 
 from src import config
+from src.data.sessions import expected_latest_session, is_up_to_date  # noqa: F401 (dùng lại ở giao diện)
 from src.finance.health import DANGER, GOOD, INFO, WARNING
 
 # ---------------------------------------------------------------- biểu tượng (Material Symbols)
@@ -73,36 +74,3 @@ def format_date(iso_date: str | None) -> str:
         return datetime.fromisoformat(str(iso_date)[:10]).strftime("%d/%m/%Y")
     except ValueError:
         return str(iso_date)
-
-
-def expected_latest_session(now: datetime) -> date:
-    """Phiên gần nhất lẽ ra đã có dữ liệu chốt, tính theo ngày làm việc (thứ Hai–thứ Sáu).
-
-    Trong ngày làm việc, sau SESSION_DATA_READY_HOUR giờ thì là hôm nay; trước giờ đó thì là ngày làm việc
-    trước. Không biết lịch nghỉ lễ, nên chỉ dùng để quyết định "có nên hỏi SSI phiên mới không".
-    """
-    now = now.astimezone(config.VN_TZ)
-    day = now.date()
-    if day.weekday() < 5 and now.hour >= config.SESSION_DATA_READY_HOUR:
-        return day
-    day -= timedelta(days=1)
-    while day.weekday() >= 5:
-        day -= timedelta(days=1)
-    return day
-
-
-def is_up_to_date(last_fetched_at: str | None, now: datetime) -> bool:
-    """True nếu lần tải gần nhất diễn ra SAU thời điểm phiên gần nhất chốt dữ liệu.
-
-    Dựa vào thời điểm tải chứ không dựa vào ngày phiên trong kho, nên ngày nghỉ lễ (không có phiên)
-    không bị báo nhầm là dữ liệu cũ, miễn là đã hỏi SSI sau giờ chốt.
-    """
-    if not last_fetched_at:
-        return False
-    try:
-        fetched = datetime.fromisoformat(last_fetched_at).astimezone(config.VN_TZ)
-    except ValueError:
-        return False
-    session = expected_latest_session(now)
-    ready = datetime.combine(session, time(config.SESSION_DATA_READY_HOUR), tzinfo=config.VN_TZ)
-    return fetched >= ready

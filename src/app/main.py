@@ -30,6 +30,7 @@ import streamlit as st  # noqa: E402
 from src import config  # noqa: E402
 from src.app import style, views  # noqa: E402
 from src.app.ui import ICONS, expected_latest_session, format_date, format_time, is_up_to_date  # noqa: E402
+from src.data.quality import collection_summary, quality_table  # noqa: E402
 from src.data.storage import Storage  # noqa: E402
 from src.data.updater import DataUpdater  # noqa: E402
 from src.finance.health import build_health_report  # noqa: E402
@@ -58,9 +59,14 @@ def cached_market_data(db_path: str, db_mtime: float, symbols: tuple[str, ...]) 
 @st.cache_data(show_spinner=False)
 def cached_store_info(db_path: str, db_mtime: float) -> dict[str, pd.DataFrame]:
     with Storage(db_path) as storage:
+        coverage = storage.coverage()
+        full_log = storage.load_fetch_log(limit=100_000)
+        stocks = coverage.loc[coverage["kind"] == "stock", "symbol"].tolist() if not coverage.empty else []
         return {
-            "coverage": storage.coverage(),
-            "fetch_log": storage.load_fetch_log(limit=30),
+            "coverage": coverage,
+            "fetch_log": full_log.head(30),
+            "collection": collection_summary(full_log, storage.trading_calendar(config.MARKET_INDEX)),
+            "quality": quality_table(storage, stocks) if stocks else pd.DataFrame(),
             "market_summary": storage.load_market_summary("HOSE").tail(config.MARKET_SUMMARY_SESSIONS),
         }
 

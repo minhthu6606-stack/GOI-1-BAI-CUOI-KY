@@ -26,6 +26,7 @@ from src.finance.health import (
     vnd_billion,
 )
 from src.finance.market_data import MarketData
+from src.data.quality import sessions_collected
 from src.finance.portfolio import Portfolio
 
 PERIODS = {"1 tháng": 21, "3 tháng": 63, "6 tháng": 126, "1 năm": 250, "2 năm": 500, "3 năm": 750}
@@ -635,6 +636,43 @@ def method(ctx: AppContext) -> None:
                                    "Ngưỡng": frame["threshold"].replace("", "không có"), "Cơ sở": frame["source"]}),
                      hide_index=True, border="horizontal")
 
+    if ctx.report is not None and ctx.report.backtest is not None and ctx.report.backtest.observations:
+        bt = ctx.report.backtest
+        st.html('<div class="section-title">Kiểm định mô hình VaR</div>')
+        st.caption("Câu hỏi: con số VaR 95% có dự báo đúng không? Cách làm: tính lại VaR cho từng ngày trong quá khứ, "
+                   "mỗi ngày chỉ dùng 250 phiên trước đó, rồi đếm số ngày lỗ thực tế vượt VaR. Mô hình đúng thì "
+                   "khoảng 5% số ngày vượt, và các lần vượt không dồn cục.")
+        k1, k2, k3, k4 = st.columns(4)
+        kpi_card(k1, "Số ngày kiểm định", f"{bt.observations} ngày",
+                 f"Từ {format_date(str(bt.series.index.min()))} đến {format_date(str(bt.series.index.max()))}.", tone="p")
+        kpi_card(k2, "Số lần lỗ vượt VaR", f"{bt.exceptions} lần",
+                 f"Tỷ lệ {pct(bt.exception_rate, 1)}; kỳ vọng {pct(bt.expected_rate, 0)} ≈ {bt.expected_exceptions:.0f} lần.",
+                 tone="g")
+        if bt.passes_pof:
+            pof_note, pof_status = "p ≥ 0,05: tỷ lệ vượt phù hợp với 5%.", GOOD
+        elif bt.too_few_exceptions:
+            pof_note, pof_status = "Vượt ít hơn kỳ vọng: VaR đang thận trọng (ước lượng lỗ cao hơn thực tế).", INFO
+        else:
+            pof_note, pof_status = "Vượt nhiều hơn kỳ vọng: VaR đang đánh giá thấp rủi ro.", WARNING
+        kpi_card(k3, "Kupiec: tỷ lệ vượt", f"p = {num(bt.p_pof, 2)}", pof_note, pof_status, tone="p")
+        kpi_card(k4, "Christoffersen: độc lập", f"p = {num(bt.p_ind, 2)}",
+                 "p ≥ 0,05: các lần vượt không dồn cục.", GOOD if bt.passes_independence else WARNING, tone="g")
+        chart_card(charts.backtest_chart(bt.series),
+                   "cột tím là lãi/lỗ từng ngày của danh mục (tỷ trọng hiện tại), đường vàng là mức lỗ VaR đã dự báo "
+                   "từ hôm trước. Cột đỏ có dấu X là ngày lỗ vượt dự báo. Nhiều cột đỏ hơn kỳ vọng nghĩa là VaR đang "
+                   f"đánh giá thấp rủi ro. {HOW_TO_INTERACT}")
+
+    st.html('<div class="section-title">Chất lượng và truy vết dữ liệu</div>')
+    coverage = ctx.store_info.get("coverage", pd.DataFrame())
+    log = ctx.store_info.get("fetch_log", pd.DataFrame())
+    if coverage.empty:
+        st.info("Chưa có dữ liệu trong kho.")
+    else:
+        data_quality_section(ctx, coverage, log)
+    limits_section()
+
+
+def limits_section() -> None:
     st.html('<div class="section-title">Giới hạn của sản phẩm</div>')
     left, right = st.columns(2)
     for i, (icon, text) in enumerate(LIMITS):
@@ -642,24 +680,51 @@ def method(ctx: AppContext) -> None:
             st.markdown(f":violet[:material/{icon}:] {text}")
     st.caption(f":material/gavel: {DISCLAIMER}")
 
-    st.html('<div class="section-title">Chất lượng và truy vết dữ liệu</div>')
-    coverage = ctx.store_info.get("coverage", pd.DataFrame())
-    log = ctx.store_info.get("fetch_log", pd.DataFrame())
-    if coverage.empty:
-        st.info("Chưa có dữ liệu trong kho.")
-        return
+
+def data_quality_section(ctx: AppContext, coverage: pd.DataFrame, log: pd.DataFrame) -> None:
     stock_log = log[log["dataset"] == "stock_daily"].drop_duplicates("symbol") if not log.empty else log
     missing = int(stock_log["missing_sessions"].fillna(0).sum()) if not stock_log.empty else 0
     stocks = coverage[coverage["kind"] == "stock"]
     q1, q2, q3, q4 = st.columns(4)
     kpi_card(q1, "Số mã trong kho", f"{len(stocks)} mã", "Cộng thêm chỉ số VN-Index.", tone="p")
-    kpi_card(q2, "Số phiên mỗi mã", f"{int(stocks['sessions'].max()) if not stocks.empty else 0} phiên",
-             f"Từ {format_date(stocks['first'].min())} đến {format_date(stocks['last'].max())}." if not stocks.empty
-             else "Chưa có.", tone="g")
+    kpi_card(q2, "Số phiên đã tự thu thập", f"{int(stocks['sessions'].max()) if not stocks.empty else 0} phiên",
+             f"Mỗi mã, tự tải từ SSI: từ {format_date(stocks['first'].min())} đến "
+             f"{format_date(stocks['last'].max())}." if not stocks.empty else "Chưa có.", tone="g")
     kpi_card(q3, "Phiên thiếu", f"{missing} phiên", "So với lịch giao dịch của VN-Index, ở lần tải gần nhất.",
              GOOD if missing == 0 else WARNING, tone="p")
-    kpi_card(q4, "Lần tải gần nhất", format_time(log["started_at"].iloc[0]) if not log.empty else "chưa có",
-             "Giờ Việt Nam.", tone="g")
+    collection = ctx.store_info.get("collection", pd.DataFrame())
+    sessions = sessions_collected(collection)
+    kpi_card(q4, "Số phiên đã chạy cập nhật", f"{len(sessions)} phiên",
+             f"Lần tải gần nhất: {format_time(log['started_at'].iloc[0])}." if not log.empty else "Chưa tải lần nào.",
+             tone="g")
+    quality = ctx.store_info.get("quality", pd.DataFrame())
+    if not quality.empty and "cross_checked" in quality and quality["cross_checked"].fillna(0).sum() > 0:
+        st.markdown(f"Đối chiếu lợi suất tự tính từ giá đóng cửa với % thay đổi do SSI công bố trên "
+                    f"**{int(quality['cross_checked'].fillna(0).sum()):,} phiên**".replace(",", ".")
+                    + f": **{int(quality['cross_mismatch'].fillna(0).sum())} phiên** lệch quá 1 điểm %.")
+    if not collection.empty:
+        with st.container(key=card_key("collection", "p")):
+            st.markdown(f"**Nhật ký thu thập theo phiên** · ứng dụng đã chạy cập nhật vào {len(sessions)} phiên: "
+                        + ", ".join(format_date(s_) for s_ in sessions))
+            st.dataframe(pd.DataFrame({
+                "Lúc tải (giờ VN)": collection["started_at"].map(format_time),
+                "Phiên": collection["session"].map(format_date),
+                "Tải đúng ngày": collection["on_time"].map({True: "Có", False: "Tải bù"}),
+                "Số chuỗi": collection["series"],
+                "Thành công": collection["ok"],
+                "Lỗi": collection["error"],
+                "Mã lỗi": collection["failed_symbols"],
+            }), hide_index=True, width="stretch")
+            st.caption("Mỗi dòng là một lần cập nhật. \"Phiên\" là phiên mới nhất lẽ ra đã có dữ liệu tại lúc tải; "
+                       "\"Tải bù\" là phiên được tải vào hôm sau (dữ liệu vẫn đầy đủ nhờ mỗi lần tải lại 14 ngày gần nhất).")
+    if not quality.empty and "missing" in quality:
+        with st.expander("Bảng chất lượng dữ liệu từng mã", icon=":material/fact_check:"):
+            st.dataframe(pd.DataFrame({
+                "Mã": quality["symbol"], "Số phiên": quality["sessions"],
+                "Phiên thiếu": quality["missing"], "Dòng bị gắn cờ": quality["flagged"],
+                "Phiên có giá đã điều chỉnh": quality["adjusted"], "Phiên đối chiếu": quality["cross_checked"],
+                "Lệch > 1 điểm %": quality["cross_mismatch"],
+            }), hide_index=True, width="stretch")
     with st.expander("Bảng độ phủ dữ liệu từng mã", icon=":material/table:"):
         st.dataframe(pd.DataFrame({
             "Loại": coverage["kind"].map(KIND_LABELS),

@@ -303,3 +303,28 @@ def diversity_scale(effective_n: float, good: float = 10, concentrated: float = 
     fig.update_xaxes(range=[0, top], tickvals=[0, concentrated, good, top], showgrid=False, title_text="Số mã hiệu dụng")
     fig.update_yaxes(showticklabels=False, showgrid=False)
     return fig
+
+
+def backtest_chart(series: pd.DataFrame) -> go.Figure:
+    """Kiểm định VaR: lợi suất từng ngày (cột) và ngưỡng −VaR dự báo trước đó (đường); ngày lỗ vượt VaR tô đỏ."""
+    dates = pd.to_datetime(series.index)
+    colors = [DOWN if hit else "#b9a2ff" for hit in series["exception"]]
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=dates, y=series["return"], name="Lợi suất ngày", marker=dict(color=colors),
+        hovertemplate="Lợi suất: %{y:.2%}<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=dates, y=-series["var"], name="Ngưỡng VaR 95% (dự báo hôm trước)", mode="lines",
+        line=dict(color=SERIES[1], width=2.5), hovertemplate="−VaR: %{y:.2%}<extra></extra>",
+    ))
+    hits = series[series["exception"]]
+    fig.add_trace(go.Scatter(
+        x=pd.to_datetime(hits.index), y=hits["return"], name="Ngày lỗ vượt VaR", mode="markers",
+        marker=dict(color=DOWN, size=8, symbol="x"), hovertemplate="Vượt VaR: %{y:.2%}<extra></extra>",
+    ))
+    _layout(fig, "Kiểm định VaR: lỗ thực tế so với ngưỡng dự báo", y_title="Lợi suất ngày", y_format=".0%", height=400)
+    _crosshair(fig)
+    fig.update_xaxes(tickformat="%m/%Y", hoverformat="%d/%m/%Y", rangeslider=dict(visible=True, thickness=0.07))
+    fig.update_layout(bargap=0)
+    return fig

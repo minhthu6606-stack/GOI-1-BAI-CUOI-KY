@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from src.finance import concentration, liquidity, risk, stress
+from src.finance.backtest import BacktestResult, backtest_var
 from src.finance.market_data import MarketData
 from src.finance.portfolio import Portfolio, value_portfolio
 
@@ -50,6 +51,7 @@ class HealthReport:
     market_returns: pd.Series
     checks: list[Check] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    backtest: BacktestResult | None = None   # kiểm định ngoài mẫu của VaR (Kupiec, Christoffersen)
 
     def checks_frame(self) -> pd.DataFrame:
         return pd.DataFrame([c.__dict__ for c in self.checks])
@@ -168,7 +170,7 @@ def build_health_report(portfolio: Portfolio, market: MarketData,
     metrics["floor_loss_3"] = s3["total_loss"]
 
     report = HealthReport(valuation, totals, sectors, liq, metrics, stress_1, stress_3, port_ret, market_ret,
-                          notes=notes)
+                          notes=notes, backtest=backtest_var(port_ret))
     _add_checks(report, ucits, n_eff, sectors, illiquid, participation, market)
     return report
 
@@ -278,6 +280,33 @@ def _add_checks(report: HealthReport, ucits: dict, n_eff: float, sectors: pd.Ser
         "Jorion (2007), mô phỏng lịch sử",
         "Nếu mức lỗ này vượt khả năng chịu đựng của bạn, cân nhắc giảm tỷ trọng cổ phiếu hoặc giữ thêm tiền mặt.",
     ))
+    bt = report.backtest
+    if bt is not None and bt.observations:
+        if bt.passes_pof and bt.passes_independence:
+            bt_status = GOOD
+            bt_action = "Mô hình VaR đạt kiểm định: có thể dùng con số VaR làm tham khảo."
+        elif not bt.passes_independence:
+            bt_status = WARNING
+            bt_action = ("Các ngày lỗ vượt VaR có xu hướng dồn vào cùng giai đoạn: khi thị trường xấu, lỗ có thể "
+                         "kéo dài nhiều phiên liền, đừng xem VaR như mức lỗ tối đa.")
+        elif bt.too_few_exceptions:
+            bt_status = INFO
+            bt_action = ("VaR đang thận trọng (lỗ thực tế ít khi vượt mức dự báo): con số VaR có thể cao hơn rủi ro "
+                         "thực tế, dùng làm tham khảo theo hướng an toàn.")
+        else:
+            bt_status = WARNING
+            bt_action = ("Lỗ thực tế vượt VaR nhiều hơn kỳ vọng: xem con số VaR như mức tối thiểu, thực tế có thể "
+                         "lỗ nhiều hơn.")
+        add(Check(
+            "Rủi ro thị trường", "Độ tin cậy của VaR (kiểm định ngoài mẫu)",
+            f"{bt.exceptions}/{bt.observations} ngày vượt VaR ({pct(bt.exception_rate)})", bt_status,
+            "Tỷ lệ vượt gần 5%; p-value Kupiec và Christoffersen ≥ 5%",
+            (f"Tính lại VaR từng ngày trong {bt.observations} phiên quá khứ (chỉ dùng dữ liệu trước ngày đó, giữ tỷ "
+             f"trọng hiện tại): lỗ thực tế vượt VaR {bt.exceptions} lần, kỳ vọng khoảng {bt.expected_exceptions:.0f} "
+             f"lần. p-value Kupiec {num(bt.p_pof, 2)}, Christoffersen {num(bt.p_ind, 2)}."),
+            "Kupiec (1995); Christoffersen (1998)",
+            bt_action,
+        ))
     add(Check(
         "Rủi ro thị trường", "Sụt giảm tối đa 1 năm (Max Drawdown)", pct(m["max_drawdown_1y"]), INFO, "",
         f"Nếu nắm danh mục này trong 250 phiên vừa qua, có lúc giá trị giảm {pct(abs(m['max_drawdown_1y']))} so với đỉnh trước đó.",

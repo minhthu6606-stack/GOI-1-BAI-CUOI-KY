@@ -115,7 +115,11 @@ def _to_frame(records: list[dict[str, Any]], field_map: dict[str, str], symbol: 
             row[our_name] = parse_ssi_date(raw) if our_name == "trading_date" else to_float(raw)
         rows.append(row)
     columns = ["symbol", *field_map.values()]
-    return pd.DataFrame(rows, columns=columns)
+    frame = pd.DataFrame(rows, columns=columns)
+    numeric = [c for c in columns if c not in ("symbol", "trading_date")]
+    # Cột toàn giá trị trống sẽ có kiểu object (None); ép về số thực để so sánh không lỗi kiểu dữ liệu
+    frame[numeric] = frame[numeric].astype(float)
+    return frame
 
 
 def _clean(frame: pd.DataFrame, report: QualityReport) -> pd.DataFrame:

@@ -11,7 +11,7 @@ Nguồn dữ liệu: SSI FastConnect API v3, chỉ sử dụng quyền đọc d�
 ## Trạng thái
 Đã có: lớp gọi API SSI, chuẩn hóa và kiểm tra chất lượng dữ liệu, kho SQLite, script cập nhật dữ liệu,
 lớp tính toán tài chính (tập trung, thanh khoản, rủi ro thị trường, kịch bản giảm sàn), ứng dụng Streamlit,
-kiểm thử tự động. Đang làm: kiểm định VaR ngoài mẫu và hoàn thiện tài liệu.
+kiểm thử tự động, kiểm định VaR ngoài mẫu (Kupiec, Christoffersen), nhật ký thu thập theo phiên và kịch bản thử lỗi. Đang làm: báo cáo và video.
 
 ## Chạy nhanh KHÔNG cần API key (dành cho người chấm)
     python -m venv .venv
@@ -54,6 +54,24 @@ Lần đầu `update_data.py` tải đủ 3 năm cho 16 mã (6 mã danh mục m�
 các lần sau chỉ tải phần mới, kèm tổng hợp thị trường HOSE của 20 phiên gần nhất. Nên chạy sau 15:00 để có giá đóng
 cửa cuối phiên.
 
+## Kiểm thử và kiểm chứng
+    python -m pytest                              # 97 kiểm thử tự động (không cần mạng, không cần key)
+    python scripts\verification_report.py         # chất lượng dữ liệu, nhật ký thu thập, kiểm định VaR -> docs\kiem_chung\
+    python scripts\test_error_scenarios.py        # thử 9 tình huống lỗi -> docs\kiem_chung\thu_loi.md
+    python scripts\update_data.py --sessions      # in nhật ký thu thập theo phiên
+
+Dữ liệu theo phiên, không cần ghi thời gian thực: mỗi lần cập nhật tải lại từ (phiên cuối trong kho − 14 ngày) đến
+hôm nay, nên nghỉ nhiều ngày không mở máy thì lần sau vẫn tải bù đủ (tình huống 8 của script thử lỗi); tải trong giờ
+giao dịch thì giá tạm được thay bằng giá đóng cửa ở lần tải sau 15:00 (tình huống 9).
+
+Kiểm định VaR: tính lại VaR 95% cho từng ngày trong quá khứ (mỗi ngày chỉ dùng 250 phiên trước đó), đếm số ngày lỗ
+thực tế vượt VaR, rồi kiểm định Kupiec (1995) cho tỷ lệ vượt và Christoffersen (1998) cho tính độc lập. Kết quả hiện
+ở trang Phương pháp & dữ liệu và trong mục Cảnh báo.
+
+Tự cập nhật hằng ngày không cần mở ứng dụng (tùy chọn, Windows):
+`powershell -ExecutionPolicy Bypass -File scripts\dang_ky_cap_nhat_tu_dong.ps1` (15:30 thứ Hai–thứ Sáu; máy tắt thì
+chạy bù khi bật lại).
+
 ## Cấu trúc mã nguồn
     src/config.py            cấu hình chung: đường dẫn, múi giờ, tham số SSI
     src/logging_setup.py     ghi nhật ký ra màn hình và logs/
@@ -61,6 +79,8 @@ cửa cuối phiên.
     src/data/normalize.py    chuẩn hóa dữ liệu và kiểm tra chất lượng
     src/data/storage.py      kho SQLite: dữ liệu theo phiên, danh sách mã, response thô, nhật ký cập nhật
     src/data/updater.py      tải lần đầu, cập nhật phần mới, phát hiện giá lịch sử bị điều chỉnh
+    src/data/sessions.py     lịch phiên: phiên gần nhất đã chốt dữ liệu, dữ liệu đã mới chưa
+    src/data/quality.py      nhật ký thu thập theo phiên, bảng chất lượng dữ liệu từng mã
     src/finance/portfolio.py      đọc, kiểm tra và định giá danh mục
     src/finance/market_data.py    đọc dữ liệu thị trường từ kho cho lớp tài chính
     src/finance/concentration.py  mức tập trung theo mã và ngành (HHI, số mã hiệu dụng, quy tắc 5/10/40)
@@ -68,6 +88,7 @@ cửa cuối phiên.
     src/finance/risk.py           biến động, beta, VaR lịch sử, mức sụt giảm tối đa
     src/finance/stress.py         kịch bản mọi mã giảm sàn (biên độ, bước giá)
     src/finance/health.py         tổng hợp báo cáo sức khỏe, ngưỡng và lời giải thích
+    src/finance/backtest.py       kiểm định ngoài mẫu VaR (Kupiec, Christoffersen)
     src/app/main.py               ứng dụng Streamlit: chọn nguồn dữ liệu, tính toán chung, menu điều hướng, khung Dữ liệu
     src/app/views.py              nội dung từng trang
     src/app/charts.py             các biểu đồ Plotly (có tương tác: rê chuột, phóng to, thanh trượt thời gian)

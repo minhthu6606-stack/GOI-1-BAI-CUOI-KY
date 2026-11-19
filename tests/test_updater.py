@@ -151,3 +151,35 @@ def test_market_summary_stops_when_history_not_supported(storage):
     assert summary["trading_date"].tolist() == ["2026-11-16"]
     log = storage.load_fetch_log()
     assert "dừng" in log.loc[log["dataset"] == "market_summary", "message"].iloc[0]
+
+
+def test_long_gap_is_backfilled_without_missing_or_duplicates(storage):
+    """Nghỉ nhiều phiên (vd ngày thi) rồi mới mở lại: một lần tải bù đủ, không thiếu, không trùng."""
+    client = FakeClient()
+    DataUpdater(client, storage, history_years=1, today=date(2026, 10, 30)).run(["FPT"])
+    later = date(2026, 11, 20)                                              # nghỉ 3 tuần
+    results = DataUpdater(client, storage, history_years=1, today=later).run(["FPT"])
+    stock = next(r for r in results if r.symbol == "FPT")
+    frame = storage.load_daily("stock_daily", "FPT")
+    assert stock.mode == "incremental" and stock.missing_sessions == 0
+    assert frame["trading_date"].max() == later.isoformat()
+    assert not frame["trading_date"].duplicated().any()
+    assert set(d.isoformat() for d in business_days(date(2026, 11, 2), later)) <= set(frame["trading_date"])
+
+
+def test_intraday_price_is_replaced_by_close_without_full_refresh(storage):
+    """Tải trong giờ giao dịch (giá tạm) rồi tải lại sau giờ chốt: giá được thay, không tải lại toàn bộ."""
+    DataUpdater(FakeClient(stock_price=50500), storage, history_years=1, today=TODAY).run(["FPT"])
+    client = FakeClient(stock_price=50500)
+    original = client.get_stock_daily
+
+    def final_close(symbol, start, end):
+        rows = original(symbol, start, end)
+        rows[-1] = {**rows[-1], "close": "51000"}                           # phiên hôm nay có giá đóng cửa cuối
+        return rows
+
+    client.get_stock_daily = final_close
+    results = DataUpdater(client, storage, history_years=1, today=TODAY).run(["FPT"])
+    stock = next(r for r in results if r.symbol == "FPT")
+    assert stock.mode == "incremental"
+    assert storage.load_daily("stock_daily", "FPT", start=TODAY.isoformat())["close"].iloc[0] == 51000

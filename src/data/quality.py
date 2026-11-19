@@ -4,6 +4,7 @@ Báo cáo chất lượng và truy vết dữ liệu (dùng cho trang Phương p
     collection_summary(fetch_log)       mỗi lần cập nhật một dòng: lúc nào, phiên nào, bao nhiêu chuỗi thành công/lỗi
     quality_table(storage, symbols, ...) mỗi mã một dòng: số phiên, phiên thiếu, dòng bị gắn cờ, giá đã điều chỉnh,
                                          đối chiếu lợi suất tự tính với % thay đổi SSI công bố
+    cross_mismatch_details(storage, ...) chi tiết từng phiên lệch quá 1 điểm % (để giải thích trong báo cáo)
 """
 from __future__ import annotations
 
@@ -96,3 +97,36 @@ def quality_table(storage: Storage, symbols: list[str], index_code: str = config
             "cross_mismatch": int((gap > CROSS_CHECK_TOLERANCE).sum()),
         })
     return pd.DataFrame(rows)
+
+
+def cross_mismatch_details(storage: Storage, symbols: list[str]) -> pd.DataFrame:
+    """Liệt kê từng phiên mà lợi suất tự tính (từ giá đã điều chỉnh) lệch quá 1 điểm % so với % thay đổi SSI.
+
+    Nguyên nhân thường gặp: ngày giao dịch không hưởng quyền (cổ tức, cổ phiếu thưởng). Khi đó SSI tính % thay đổi
+    so với giá tham chiếu đã điều chỉnh của sở giao dịch, còn chuỗi giá lịch sử được điều chỉnh theo cách riêng,
+    nên hai con số có thể khác nhau ở đúng ngày đó. Cột ratio_prev_close = giá đóng cửa phiên trước theo SSI
+    (suy ra từ giá tham chiếu) / giá đóng cửa phiên trước trong chuỗi đã điều chỉnh; khác 1 rõ rệt nghĩa là có
+    điều chỉnh giá ở ngày đó.
+    """
+    rows = []
+    for symbol in symbols:
+        frame = storage.load_daily("stock_daily", symbol)
+        if frame.empty:
+            continue
+        close = pd.to_numeric(frame["close"], errors="coerce")
+        reported = pd.to_numeric(frame["price_change_pct"], errors="coerce") / 100
+        computed = close.pct_change()
+        gap = (computed - reported).abs()
+        implied_prev = close / (1 + reported)            # giá tham chiếu suy ra từ % thay đổi SSI
+        for i in gap[gap > CROSS_CHECK_TOLERANCE].index:
+            rows.append({
+                "symbol": symbol,
+                "trading_date": frame.at[i, "trading_date"],
+                "prev_close": float(close.iloc[i - 1]),
+                "close": float(close.iloc[i]),
+                "computed_pct": float(computed.iloc[i] * 100),
+                "reported_pct": float(reported.iloc[i] * 100),
+                "ratio_prev_close": float(implied_prev.iloc[i] / close.iloc[i - 1]),
+            })
+    columns = ["symbol", "trading_date", "prev_close", "close", "computed_pct", "reported_pct", "ratio_prev_close"]
+    return pd.DataFrame(rows, columns=columns)

@@ -91,12 +91,12 @@ def case_wrong_key() -> None:
 
 def case_unreachable() -> None:
     client = SSIClient("khoa", "bi-mat", base_url="https://may-chu-khong-ton-tai.invalid/api/v3")
-    started = time.monotonic()
+    started = time.perf_counter()
     try:
         client.check_connection()
         record("Mất kết nối", "Trỏ tới máy chủ không tồn tại", "Báo không kết nối được", "Không báo lỗi", False)
     except SSIError as exc:
-        elapsed = time.monotonic() - started
+        elapsed = time.perf_counter() - started
         record("Mất kết nối", "Trỏ tới máy chủ không tồn tại", "Báo không kết nối được, không treo",
                f"{str(exc)[:90]}... (sau {elapsed:.1f} giây)", True)
 
@@ -119,26 +119,26 @@ def case_unknown_symbol(client: SSIClient | None) -> None:
 def case_rate_limit(client: SSIClient | None) -> None:
     how = "Gửi liên tiếp 4 yêu cầu tổng hợp thị trường, đo khoảng cách"
     if client is None:
-        record("Giới hạn tần suất", how, "Mỗi yêu cầu cách nhau ≥ 1,1 giây", "Không có API key", None)
+        record("Giới hạn tần suất", how, "Mỗi yêu cầu cách nhau ≥ 1,100 giây", "Không có API key", None)
         return
     times = []
     original = client._wait_for_rate_limit
 
     def timed_wait() -> None:
         original()
-        times.append(time.monotonic())
+        times.append(time.perf_counter())
 
     client._wait_for_rate_limit = timed_wait  # ghi lại thời điểm gửi từng yêu cầu
     try:
         for _ in range(4):
             client.get_market_summary("HOSE")
     except SSIError as exc:
-        record("Giới hạn tần suất", how, "Mỗi yêu cầu cách nhau ≥ 1,1 giây", f"Lỗi khi gọi: {exc}", False)
+        record("Giới hạn tần suất", how, "Mỗi yêu cầu cách nhau ≥ 1,100 giây", f"Lỗi khi gọi: {exc}", False)
         return
     gaps = [b - a for a, b in zip(times, times[1:])]
     smallest = min(gaps) if gaps else float("nan")
-    record("Giới hạn tần suất", how, "Mỗi yêu cầu cách nhau ≥ 1,1 giây",
-           f"{len(times)} yêu cầu, khoảng cách nhỏ nhất {smallest:.2f} giây", smallest >= config.SSI_MIN_INTERVAL_SECONDS - 0.01)
+    record("Giới hạn tần suất", how, "Mỗi yêu cầu cách nhau ≥ 1,100 giây",
+           f"{len(times)} yêu cầu, khoảng cách nhỏ nhất {smallest:.3f} giây", smallest >= config.SSI_MIN_INTERVAL_SECONDS)
 
 
 def case_bad_portfolio() -> None:

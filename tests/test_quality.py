@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from src.data.normalize import normalize_stock_daily
-from src.data.quality import collection_summary, quality_table, sessions_collected
+from src.data.quality import collection_summary, cross_mismatch_details, quality_table, sessions_collected
 from src.data.storage import Storage
 
 
@@ -71,3 +71,14 @@ def test_quality_table_tolerates_missing_reported_change(storage):
     storage.upsert_daily("stock_daily", stock, fetched_at="2026-11-19T16:00:00+07:00")
     row = quality_table(storage, ["BBB"]).iloc[0]
     assert row["cross_checked"] == 0 and row["adjusted"] == 2 and row["missing"] == 0
+
+
+def test_cross_mismatch_details_lists_dates(storage):
+    stock = pd.DataFrame({"symbol": "CCC", "trading_date": ["2026-11-16", "2026-11-17", "2026-11-18"],
+                          "close": [100.0, 101.0, 110.0], "price_change_pct": [0.0, 1.0, 1.0]})
+    storage.upsert_daily("stock_daily", stock, fetched_at="2026-11-19T16:00:00+07:00")
+    details = cross_mismatch_details(storage, ["CCC"])
+    assert details["trading_date"].tolist() == ["2026-11-18"]         # 101 -> 110 (+8,9%) nhưng SSI ghi +1%
+    row = details.iloc[0]
+    assert round(row["computed_pct"], 2) == 8.91 and row["reported_pct"] == 1.0
+    assert round(row["ratio_prev_close"], 4) == round(110 / 1.01 / 101, 4)

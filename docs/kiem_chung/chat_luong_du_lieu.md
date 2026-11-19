@@ -1,6 +1,6 @@
 # Chất lượng dữ liệu
 
-Tạo lúc 20/11/2026 00:46 (giờ Việt Nam) từ kho `data\portfolio.db`.
+Tạo lúc 20/11/2026 00:53 (giờ Việt Nam) từ kho `data\portfolio.db`.
 
 Đối chiếu: lợi suất tự tính từ giá đóng cửa đã điều chỉnh so với `priceChangePercentage` do SSI công bố; lệch quá 1 điểm phần trăm thì đếm là lệch. Phiên thiếu tính theo lịch giao dịch của VN-Index.
 
@@ -24,3 +24,11 @@ Tạo lúc 20/11/2026 00:46 (giờ Việt Nam) từ kho `data\portfolio.db`.
 | GAS | 747 | 2023-11-20 | 2026-11-19 | 0 | 0 | 694 | 746 | 0 |
 
 **Tổng:** 16 mã, 0 phiên thiếu, 1 phiên lệch.
+
+## Chi tiết các phiên lệch
+
+Cột cuối khác 1 rõ rệt nghĩa là giá tham chiếu của sở khác giá đóng cửa phiên trước trong chuỗi đã điều chỉnh, tức là có điều chỉnh giá (vd ngày giao dịch không hưởng quyền). Cần tra lịch sự kiện của mã để xác nhận.
+
+| Mã | Ngày | Đóng cửa phiên trước (đã điều chỉnh) | Đóng cửa | Lợi suất tự tính (%) | % thay đổi SSI | Giá tham chiếu SSI / đóng cửa trước |
+| --- | --- | --- | --- | --- | --- | --- |
+| ACB | 2025-07-03 | 18.352,08 | 18.438,24 | 0,47 | -1,41 | 1,0191 |

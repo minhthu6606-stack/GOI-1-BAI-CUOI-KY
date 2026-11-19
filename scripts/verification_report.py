@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pandas as pd  # noqa: E402
 
 from src import config  # noqa: E402
-from src.data.quality import collection_summary, quality_table, sessions_collected  # noqa: E402
+from src.data.quality import collection_summary, cross_mismatch_details, quality_table, sessions_collected  # noqa: E402
 from src.data.storage import Storage  # noqa: E402
 from src.finance.health import build_health_report, num, pct  # noqa: E402
 from src.finance.market_data import load_market_data  # noqa: E402
@@ -38,6 +38,11 @@ def _table(frame: pd.DataFrame) -> str:
     return "\n".join([header, line, *body])
 
 
+def _vn(value: float, digits: int = 2) -> str:
+    """Định dạng số kiểu Việt Nam: dấu chấm phân cách hàng nghìn, dấu phẩy thập phân."""
+    return f"{value:,.{digits}f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+
 def _header(title: str, db_path: Path) -> str:
     now = datetime.now(config.VN_TZ).strftime("%d/%m/%Y %H:%M")
     return f"# {title}\n\nTạo lúc {now} (giờ Việt Nam) từ kho `{db_path.relative_to(config.PROJECT_ROOT)}`.\n\n"
@@ -51,6 +56,7 @@ def main() -> None:
 
     with Storage(db_path) as storage:
         quality = quality_table(storage, config.TRACKED_SYMBOLS)
+        mismatches = cross_mismatch_details(storage, config.TRACKED_SYMBOLS)
         summary = collection_summary(storage.load_fetch_log(limit=100_000), storage.trading_calendar(config.MARKET_INDEX))
         portfolio = load_portfolio_csv(config.DEMO_PORTFOLIO_PATH)
         market = load_market_data(storage, portfolio.symbols)
@@ -63,10 +69,25 @@ def main() -> None:
         "cross_mismatch": "Lệch > 1 điểm %"})
     total_missing = int(quality.get("missing", pd.Series(dtype=int)).fillna(0).sum())
     total_mismatch = int(quality.get("cross_mismatch", pd.Series(dtype=int)).fillna(0).sum())
+    if mismatches.empty:
+        detail = "\nKhông có phiên nào lệch quá 1 điểm %.\n"
+    else:
+        detail_view = pd.DataFrame({
+            "Mã": mismatches["symbol"], "Ngày": mismatches["trading_date"],
+            "Đóng cửa phiên trước (đã điều chỉnh)": mismatches["prev_close"].map(_vn),
+            "Đóng cửa": mismatches["close"].map(_vn),
+            "Lợi suất tự tính (%)": mismatches["computed_pct"].map(_vn),
+            "% thay đổi SSI": mismatches["reported_pct"].map(_vn),
+            "Giá tham chiếu SSI / đóng cửa trước": mismatches["ratio_prev_close"].map(lambda v: _vn(v, 4)),
+        })
+        detail = ("\n## Chi tiết các phiên lệch\n\nCột cuối khác 1 rõ rệt nghĩa là giá tham chiếu của sở khác giá "
+                  "đóng cửa phiên trước trong chuỗi đã điều chỉnh, tức là có điều chỉnh giá (vd ngày giao dịch không "
+                  "hưởng quyền). Cần tra lịch sự kiện của mã để xác nhận.\n\n" + _table(detail_view) + "\n")
     text = (_header("Chất lượng dữ liệu", db_path)
             + "Đối chiếu: lợi suất tự tính từ giá đóng cửa đã điều chỉnh so với `priceChangePercentage` do SSI công bố; "
               "lệch quá 1 điểm phần trăm thì đếm là lệch. Phiên thiếu tính theo lịch giao dịch của VN-Index.\n\n"
-            + _table(view) + f"\n\n**Tổng:** {len(quality)} mã, {total_missing} phiên thiếu, {total_mismatch} phiên lệch.\n")
+            + _table(view) + f"\n\n**Tổng:** {len(quality)} mã, {total_missing} phiên thiếu, {total_mismatch} phiên lệch.\n"
+            + detail)
     (OUT_DIR / "chat_luong_du_lieu.md").write_text(text, encoding="utf-8")
 
     # 2. Nhật ký thu thập
@@ -108,6 +129,9 @@ def main() -> None:
 
     print(f"Đã ghi 3 file vào {OUT_DIR}")
     print(f"   Chất lượng: {len(quality)} mã, {total_missing} phiên thiếu, {total_mismatch} phiên lệch > 1 điểm %")
+    for row in mismatches.itertuples(index=False):
+        print(f"      Lệch: {row.symbol} ngày {row.trading_date}: tự tính {row.computed_pct:.2f}%, SSI {row.reported_pct:.2f}%, "
+              f"giá tham chiếu / đóng cửa trước = {row.ratio_prev_close:.4f}")
     print(f"   Thu thập: kho có {len(calendar)} phiên ({span}); ứng dụng đã chạy cập nhật vào {len(sessions)} phiên "
           f"({', '.join(sessions)})")
     print(f"   Kiểm định VaR: {bt.exceptions}/{bt.observations} ngày vượt ({pct(bt.exception_rate, 2)}), "

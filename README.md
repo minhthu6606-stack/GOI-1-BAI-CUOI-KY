@@ -55,7 +55,7 @@ các lần sau chỉ tải phần mới, kèm tổng hợp thị trường HOSE 
 cửa cuối phiên.
 
 ## Kiểm thử và kiểm chứng
-    python -m pytest                              # 97 kiểm thử tự động (không cần mạng, không cần key)
+    python -m pytest                              # 100 kiểm thử tự động (không cần mạng, không cần key)
     python scripts\verification_report.py         # chất lượng dữ liệu, nhật ký thu thập, kiểm định VaR -> docs\kiem_chung\
     python scripts\test_error_scenarios.py        # thử 9 tình huống lỗi -> docs\kiem_chung\thu_loi.md
     python scripts\update_data.py --sessions      # in nhật ký thu thập theo phiên

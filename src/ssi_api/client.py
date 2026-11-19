@@ -67,7 +67,7 @@ class SSIClient:
         self.request_count = 0                  # đếm số yêu cầu đã gửi (để báo cáo)
         self._token: str | None = None
         self._token_expires_at = 0.0            # thời điểm hết hạn, tính bằng giây (epoch)
-        self._last_request_at = 0.0
+        self._last_request_at = float("-inf")   # chưa gửi yêu cầu nào: yêu cầu đầu tiên không phải chờ
 
     @classmethod
     def from_env(cls) -> "SSIClient":
@@ -82,11 +82,18 @@ class SSIClient:
     # ------------------------------------------------------------------ nội bộ
 
     def _wait_for_rate_limit(self) -> None:
-        """Chờ đủ khoảng cách tối thiểu kể từ yêu cầu trước (tự giới hạn tần suất)."""
-        elapsed = time.monotonic() - self._last_request_at
-        if elapsed < self.min_interval:
-            time.sleep(self.min_interval - elapsed)
-        self._last_request_at = time.monotonic()
+        """Chờ đủ khoảng cách tối thiểu kể từ yêu cầu trước (tự giới hạn tần suất).
+
+        Dùng time.perf_counter (độ phân giải dưới 1 micro giây). Không dùng time.monotonic vì trên Windows với
+        Python ≤ 3.12 đồng hồ này chỉ nhảy mỗi ~16 mili giây, khoảng chờ thực tế có thể hụt vài mili giây.
+        Lặp lại phép kiểm tra để chắc chắn đã đủ khoảng cách kể cả khi hệ điều hành đánh thức sớm.
+        """
+        while True:
+            remaining = self.min_interval - (time.perf_counter() - self._last_request_at)
+            if remaining <= 0:
+                break
+            time.sleep(remaining)
+        self._last_request_at = time.perf_counter()
         self.request_count += 1
 
     def _authenticate(self) -> None:

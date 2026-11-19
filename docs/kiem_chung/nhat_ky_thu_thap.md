@@ -1,6 +1,6 @@
 # Nhật ký thu thập dữ liệu
 
-Tạo lúc 20/11/2026 00:46 (giờ Việt Nam) từ kho `data\portfolio.db`.
+Tạo lúc 20/11/2026 00:53 (giờ Việt Nam) từ kho `data\portfolio.db`.
 
 - Dữ liệu theo phiên trong kho, do mã nguồn tự tải từ SSI FastConnect và lưu kèm thời điểm tải: **747 phiên giao dịch** (từ 2023-11-20 đến 2026-11-19).
 - Ứng dụng đã chạy cập nhật vào **4 phiên**: 2026-11-16, 2026-11-17, 2026-11-18, 2026-11-19.

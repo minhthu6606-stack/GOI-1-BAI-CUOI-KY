@@ -1,6 +1,6 @@
 # Kiểm định ngoài mẫu VaR 95% (danh mục mặc định)
 
-Tạo lúc 20/11/2026 00:46 (giờ Việt Nam) từ kho `data\portfolio.db`.
+Tạo lúc 20/11/2026 00:53 (giờ Việt Nam) từ kho `data\portfolio.db`.
 
 VaR lịch sử 1 ngày, cửa sổ trượt 250 phiên; VaR của mỗi ngày chỉ dùng dữ liệu trước ngày đó. Danh mục giữ tỷ trọng hiện tại trong suốt giai đoạn.
 

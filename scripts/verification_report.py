@@ -5,6 +5,7 @@ Báo cáo kiểm chứng (đưa vào Mục 7 của báo cáo): ghi ra thư mục
     nhat_ky_thu_thap.md     số phiên dữ liệu trong kho; mỗi lần cập nhật: lúc nào, phiên nào, số chuỗi thành công/lỗi
     kiem_dinh_var.md        kiểm định ngoài mẫu VaR 95% của 3 danh mục ví dụ (Kupiec, Christoffersen)
     so_sanh_danh_muc.md     so sánh kết quả kiểm tra của 3 danh mục ví dụ
+    ket_qua_chi_tiet.md     từng danh mục ví dụ: nắm giữ, ngành, thanh khoản, toàn bộ tiêu chí (nguồn số cho báo cáo)
 
 Mọi con số đều tính từ kho dữ liệu thật (data/portfolio.db; nếu chưa có thì data_sample/sample.db).
 
@@ -25,7 +26,7 @@ from src import config  # noqa: E402
 from src.data.quality import collection_summary, cross_mismatch_details, quality_table, sessions_collected  # noqa: E402
 from src.data.storage import Storage  # noqa: E402
 from src.finance.examples import EXAMPLE_TOTAL, EXAMPLES, build_example, example_symbols  # noqa: E402
-from src.finance.health import build_health_report, count_by_status, num, pct, vnd  # noqa: E402
+from src.finance.health import build_health_report, count_by_status, num, overall_verdict, pct, vnd  # noqa: E402
 from src.finance.whatif import key_metrics  # noqa: E402
 from src.finance.market_data import load_market_data  # noqa: E402
 from src.finance.portfolio import build_portfolio  # noqa: E402
@@ -158,7 +159,36 @@ def main() -> None:
               "kết quả đẹp.\n\n" + "\n".join(lines) + "\n\n" + _table(compare.reset_index(drop=True)) + "\n")
     (OUT_DIR / "so_sanh_danh_muc.md").write_text(text, encoding="utf-8")
 
-    print(f"Đã ghi 4 file vào {OUT_DIR}")
+    # 5. Kết quả chi tiết từng danh mục ví dụ (mọi tiêu chí, ngưỡng, nguồn) - nguồn số liệu cho báo cáo Mục 6-7
+    parts = [_header("Kết quả chi tiết 3 danh mục ví dụ", db_path)
+             + "Mỗi danh mục: bảng nắm giữ, tỷ trọng ngành, thanh khoản và toàn bộ tiêu chí kiểm tra (không khai mức "
+               "chịu lỗ, tỷ lệ tham gia thanh khoản 20%).\n"]
+    for key, report in reports.items():
+        level, label, _ = overall_verdict(report.checks)
+        t = report.totals
+        holdings = report.valuation[["symbol", "quantity", "price", "market_value", "weight_total"]].copy()
+        holdings["quantity"] = holdings["quantity"].map(lambda v: _vn(v, 0))
+        holdings["price"] = holdings["price"].map(lambda v: _vn(v, 0))
+        holdings["market_value"] = holdings["market_value"].map(lambda v: _vn(v, 0))
+        holdings["weight_total"] = holdings["weight_total"].map(lambda v: pct(v))
+        holdings.columns = ["Mã", "Số lượng", "Giá đóng cửa", "Giá trị (đ)", "Tỷ trọng"]
+        sectors = pd.DataFrame({"Ngành": report.sectors.index, "Tỷ trọng phần cổ phiếu": report.sectors.map(pct).values})
+        liq = report.liquidity[["symbol", "position_pct_adv", "days_to_cash", "bucket"]].copy()
+        liq["position_pct_adv"] = liq["position_pct_adv"].map(lambda v: pct(v, 2))
+        liq["days_to_cash"] = liq["days_to_cash"].map(lambda v: "không bán được" if v == float("inf") else f"{v:.0f}")
+        liq.columns = ["Mã", "% KL TB 20 phiên đang nắm", "Số ngày có tiền", "Mức thanh khoản"]
+        checks = pd.DataFrame([[c.group, c.name, c.value, c.status, c.threshold or "—", c.source or "—"]
+                               for c in report.checks],
+                              columns=["Nhóm", "Tiêu chí", "Giá trị", "Mức", "Ngưỡng", "Cơ sở"])
+        counts = count_by_status(report.checks)
+        parts.append(
+            f"\n## {EXAMPLES[key].title}\n\n{EXAMPLES[key].description} Kết luận chung: **{label}** "
+            f"({', '.join(f'{lv} {n}' for lv, n in counts.items())}). Tổng tài sản {vnd(t['total_value'])}, "
+            f"tiền mặt {vnd(t['cash'])} ({pct(t['cash_weight'])}).\n\n"
+            + _table(holdings) + "\n\n" + _table(sectors) + "\n\n" + _table(liq) + "\n\n" + _table(checks) + "\n")
+    (OUT_DIR / "ket_qua_chi_tiet.md").write_text("".join(parts), encoding="utf-8")
+
+    print(f"Đã ghi 5 file vào {OUT_DIR}")
     print(f"   Chất lượng: {len(quality)} mã, {total_missing} phiên thiếu, {total_mismatch} phiên lệch > 1 điểm %")
     for row in mismatches.itertuples(index=False):
         print(f"      Lệch: {row.symbol} ngày {row.trading_date}: tự tính {row.computed_pct:.2f}%, SSI {row.reported_pct:.2f}%, "

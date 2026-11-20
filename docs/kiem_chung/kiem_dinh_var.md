@@ -1,6 +1,6 @@
 # Kiểm định ngoài mẫu VaR 95% (3 danh mục ví dụ)
 
-Tạo lúc 20/11/2026 18:05 (giờ Việt Nam) từ kho `data\portfolio.db`.
+Tạo lúc 20/11/2026 23:58 (giờ Việt Nam) từ kho `data\portfolio.db`.
 
 VaR lịch sử 1 ngày, cửa sổ trượt 250 phiên; VaR của mỗi ngày chỉ dùng dữ liệu trước ngày đó. Mỗi danh mục giữ tỷ trọng hiện tại trong suốt giai đoạn (2024-11-21 – 2026-11-20). Tỷ lệ vượt kỳ vọng: 5%.
 

@@ -2,7 +2,8 @@
 In báo cáo sức khỏe danh mục ra màn hình (bản dòng lệnh của phần phân tích trên giao diện).
 
 Cách chạy:
-    python scripts/portfolio_report.py                                   # danh mục mặc định
+    python scripts/portfolio_report.py                                   # danh mục ví dụ "Người mới bắt đầu"
+    python scripts/portfolio_report.py --example banks                   # beginner / banks / diversified
     python scripts/portfolio_report.py --portfolio duong_dan/danh_muc.csv
     python scripts/portfolio_report.py --participation 0.1               # giả định bán tối đa 10% ADV/phiên
 """
@@ -18,23 +19,30 @@ import pandas as pd  # noqa: E402
 
 from src import config  # noqa: E402
 from src.data.storage import Storage  # noqa: E402
+from src.finance.examples import DEFAULT_EXAMPLE, EXAMPLES, build_example, example_symbols  # noqa: E402
 from src.finance.health import DISCLAIMER, build_health_report, pct, vnd  # noqa: E402
 from src.finance.market_data import load_market_data  # noqa: E402
-from src.finance.portfolio import PortfolioError, load_portfolio_csv  # noqa: E402
+from src.finance.portfolio import PortfolioError, build_portfolio, load_portfolio_csv  # noqa: E402
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Báo cáo sức khỏe danh mục")
-    parser.add_argument("--portfolio", default=str(config.SAMPLE_DIR / "demo_portfolio.csv"))
+    parser.add_argument("--portfolio", help="file CSV danh mục (bỏ trống: dùng danh mục ví dụ)")
+    parser.add_argument("--example", default=DEFAULT_EXAMPLE, choices=list(EXAMPLES), help="danh mục ví dụ")
     parser.add_argument("--participation", type=float, default=0.2, help="tỷ lệ tối đa của ADV bán mỗi phiên")
     args = parser.parse_args()
 
-    try:
-        portfolio = load_portfolio_csv(args.portfolio)
-    except PortfolioError as exc:
-        sys.exit(f"[LỖI] {exc}")
-
     with Storage() as storage:
+        try:
+            if args.portfolio:
+                portfolio = load_portfolio_csv(args.portfolio)
+            else:
+                prices = load_market_data(storage, example_symbols()).latest["close"]
+                rows, cash = build_example(args.example, prices)
+                portfolio = build_portfolio(pd.concat([rows, pd.DataFrame({"symbol": ["CASH"], "quantity": [cash]})]))
+                print(f"Danh mục ví dụ: {EXAMPLES[args.example].title} (giá thật, số lượng giả định)")
+        except PortfolioError as exc:
+            sys.exit(f"[LỖI] {exc}")
         market = load_market_data(storage, portfolio.symbols)
     report = build_health_report(portfolio, market, participation=args.participation)
 

@@ -8,4 +8,5 @@ Các file trong thư mục này được tạo tự động từ kho dữ liệu
 | `nhat_ky_thu_thap.md` | `python scripts/verification_report.py` | Mỗi lần cập nhật: lúc nào, phiên nào, số chuỗi thành công/lỗi; danh sách phiên đã thu thập |
 | `kiem_dinh_var.md` | `python scripts/verification_report.py` | Kiểm định ngoài mẫu VaR 95% (Kupiec 1995, Christoffersen 1998) của 3 danh mục ví dụ |
 | `so_sanh_danh_muc.md` | `python scripts/verification_report.py` | So sánh kết quả kiểm tra của 3 danh mục ví dụ |
+| `ket_qua_chi_tiet.md` | `python scripts/verification_report.py` | Từng danh mục ví dụ: nắm giữ, ngành, thanh khoản, toàn bộ tiêu chí |
 | `thu_loi.md` | `python scripts/test_error_scenarios.py` | 9 tình huống: thiếu key, sai key, mất kết nối, mã không tồn tại, giới hạn tần suất, danh mục sai, dữ liệu bẩn, nghỉ nhiều phiên rồi mở lại, dữ liệu đến muộn |

@@ -1,6 +1,6 @@
 # Chất lượng dữ liệu
 
-Tạo lúc 20/11/2026 18:05 (giờ Việt Nam) từ kho `data\portfolio.db`.
+Tạo lúc 20/11/2026 23:58 (giờ Việt Nam) từ kho `data\portfolio.db`.
 
 Đối chiếu: lợi suất tự tính từ giá đóng cửa đã điều chỉnh so với `priceChangePercentage` do SSI công bố; lệch quá 1 điểm phần trăm thì đếm là lệch. Phiên thiếu tính theo lịch giao dịch của VN-Index.
 

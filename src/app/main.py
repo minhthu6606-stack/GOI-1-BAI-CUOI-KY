@@ -33,7 +33,8 @@ from src.app.ui import ICONS, expected_latest_session, format_date, format_time,
 from src.data.quality import collection_summary, quality_table  # noqa: E402
 from src.data.storage import Storage  # noqa: E402
 from src.data.updater import DataUpdater  # noqa: E402
-from src.finance.health import build_health_report  # noqa: E402
+from src.finance.examples import DEFAULT_EXAMPLE, build_example, example_symbols  # noqa: E402
+from src.finance.health import RiskProfile, build_health_report  # noqa: E402
 from src.finance.market_data import MarketData, load_market_data  # noqa: E402
 from src.finance.portfolio import CASH_SYMBOL, PortfolioError, build_portfolio  # noqa: E402
 from src.ssi_api.client import SSIClient, SSIError  # noqa: E402
@@ -93,15 +94,46 @@ def auto_update_attempts() -> set[str]:
     return set()
 
 
-def default_portfolio_rows() -> tuple[pd.DataFrame, float]:
-    """Danh mục mặc định khi mở ứng dụng (đọc từ data_sample/demo_portfolio.csv)."""
-    try:
-        rows = pd.read_csv(config.DEMO_PORTFOLIO_PATH, dtype={"symbol": str})
-    except FileNotFoundError:
-        rows = pd.DataFrame({"symbol": config.DEFAULT_SYMBOLS, "quantity": [1000] * 6, "avg_cost": [None] * 6})
+@st.cache_data(show_spinner=False)
+def cached_latest_prices(db_path: str, db_mtime: float) -> pd.Series:
+    """Giá đóng cửa phiên mới nhất của MỌI mã trong kho (để xem trước giá trị khi nhập và tạo danh mục ví dụ)."""
+    with Storage(db_path) as storage:
+        frame = pd.read_sql_query(
+            "SELECT s.symbol, s.close FROM stock_daily s JOIN (SELECT symbol, MAX(trading_date) AS d FROM stock_daily "
+            "GROUP BY symbol) m ON s.symbol = m.symbol AND s.trading_date = m.d", storage.conn)
+    return frame.set_index("symbol")["close"].astype(float)
+
+
+@st.cache_data(show_spinner=False)
+def cached_symbol_names(db_path: str, db_mtime: float) -> dict[str, str]:
+    """Mã -> tên công ty, từ danh sách chứng khoán SSI trong kho (dùng cho ô chọn mã)."""
+    with Storage(db_path) as storage:
+        securities = storage.load_securities()
+    if securities.empty:
+        return {}
+    return dict(zip(securities["symbol"], securities["name_vi"].fillna("")))
+
+
+def current_db_path() -> Path:
+    return config.DB_PATH if config.DB_PATH.exists() else config.SAMPLE_DB_PATH
+
+
+def latest_prices() -> pd.Series:
+    path = current_db_path()
+    return cached_latest_prices(str(path), path.stat().st_mtime) if path.exists() else pd.Series(dtype=float)
+
+
+def example_rows(key: str) -> tuple[pd.DataFrame, float]:
+    """Danh mục ví dụ tính theo giá mới nhất trong kho; không có kho thì đọc file CSV dự phòng."""
+    prices = latest_prices()
+    if not prices.empty:
+        rows, cash = build_example(key, prices)
+        if not rows.empty:
+            return rows, cash
+    rows = pd.read_csv(config.DEMO_PORTFOLIO_PATH, dtype={"symbol": str})
     is_cash = rows["symbol"].str.upper() == CASH_SYMBOL
-    cash = float(rows.loc[is_cash, "quantity"].sum())
-    return rows.loc[~is_cash, ["symbol", "quantity", "avg_cost"]].reset_index(drop=True), cash
+    return rows.loc[~is_cash, ["symbol", "quantity", "avg_cost"]].reset_index(drop=True), \
+        float(rows.loc[is_cash, "quantity"].sum())
 
 
 def api_key_available() -> bool:
@@ -128,8 +160,8 @@ def check_ssi_connection() -> None:
 
 
 def update_symbols(portfolio_symbols: list[str]) -> list[str]:
-    """Các mã cần cập nhật: mã trong danh mục + danh mục mặc định + các mã của dải giá chạy ngang."""
-    return list(dict.fromkeys(portfolio_symbols + config.TRACKED_SYMBOLS))
+    """Các mã cần cập nhật: mã trong danh mục + các mã của danh mục ví dụ và dải giá chạy ngang."""
+    return list(dict.fromkeys(portfolio_symbols + config.TRACKED_SYMBOLS + example_symbols()))
 
 
 def run_update(symbols: list[str], reason: str = "") -> None:
@@ -167,15 +199,17 @@ def run_update(symbols: list[str], reason: str = "") -> None:
 
 state = st.session_state
 if "portfolio_rows" not in state:
-    state.portfolio_rows, state.cash = default_portfolio_rows()
+    state.portfolio_rows, state.cash = example_rows(DEFAULT_EXAMPLE)
+    state.active_example = DEFAULT_EXAMPLE
     state.editor_version = 0
     state.ssi_status = ("unknown", "")
     state.participation_pct = 20
     state.period = "1 năm"
+    state.profile_on, state.max_daily_loss, state.max_drawdown = False, 3.0, 20   # hỏi bệnh sử: mặc định tắt
 
 
-def save_portfolio(rows: pd.DataFrame, cash: float) -> None:
-    """Lưu danh mục người dùng vừa nhập (bảng trên trang Nhập danh mục hoặc file CSV)."""
+def save_portfolio(rows: pd.DataFrame, cash: float, example: str | None = None) -> None:
+    """Lưu danh mục (trang Danh mục của bạn, file CSV hoặc trang Thử điều chỉnh). `example`: khóa danh mục ví dụ."""
     rows = rows.dropna(how="all")
     try:
         parsed = build_portfolio(pd.concat([rows, pd.DataFrame({"symbol": [CASH_SYMBOL], "quantity": [cash]})],
@@ -184,15 +218,19 @@ def save_portfolio(rows: pd.DataFrame, cash: float) -> None:
         st.error(f"Chưa lưu được danh mục: {exc}")
         return
     state.portfolio_rows, state.cash = parsed.holdings, parsed.cash
+    state.active_example = example
     state.editor_version += 1
+    state.flash = "Đã lưu danh mục. Các trang kết quả đã tính lại theo danh mục mới."
     st.rerun()
+
+
+def load_example(key: str) -> None:
+    rows, cash = example_rows(key)
+    save_portfolio(rows, cash, example=key)
 
 
 def reset_portfolio() -> None:
-    state.portfolio_rows, state.cash = default_portfolio_rows()
-    state.editor_version += 1
-    state.pop("uploaded_name", None)
-    st.rerun()
+    load_example(DEFAULT_EXAMPLE)
 
 
 # ====================================================================== tính toán dùng chung cho mọi trang
@@ -200,14 +238,17 @@ def reset_portfolio() -> None:
 def build_context() -> views.AppContext:
     has_key = api_key_available()
     ctx = views.AppContext(live=config.DB_PATH.exists(), has_key=has_key, up_to_date=False, dark=DARK,
-                           save_portfolio=save_portfolio, reset_portfolio=reset_portfolio)
+                           save_portfolio=save_portfolio, reset_portfolio=reset_portfolio, load_example=load_example,
+                           active_example=state.active_example, participation=state.participation_pct / 100)
+    if state.profile_on:
+        ctx.profile = RiskProfile(max_daily_loss=state.max_daily_loss / 100, max_drawdown=state.max_drawdown / 100)
     try:
         rows = pd.concat([state.portfolio_rows, pd.DataFrame({"symbol": [CASH_SYMBOL], "quantity": [state.cash]})],
                          ignore_index=True)
         ctx.portfolio = build_portfolio(rows.dropna(subset=["symbol"]))
     except PortfolioError as exc:
         ctx.portfolio_error = str(exc)
-    symbols = ctx.portfolio.symbols if ctx.portfolio else config.DEFAULT_SYMBOLS
+    symbols = ctx.portfolio.symbols if ctx.portfolio else example_symbols()
 
     # Tự tải phiên mới khi mở ứng dụng: có API key, có kho trên máy, dữ liệu chưa mới, phiên này chưa thử
     if ctx.live and has_key and config.AUTO_UPDATE_ON_OPEN:
@@ -228,13 +269,15 @@ def build_context() -> views.AppContext:
     mtime = db_path.stat().st_mtime
     ctx.market = cached_market_data(str(db_path), mtime, tuple(symbols))
     ctx.store_info = cached_store_info(str(db_path), mtime)
+    ctx.latest_prices = cached_latest_prices(str(db_path), mtime)
+    ctx.symbol_names = cached_symbol_names(str(db_path), mtime)
     ctx.up_to_date = ctx.live and is_up_to_date(ctx.market.last_fetched_at, now_vn())
     if ctx.portfolio is None:
         return ctx
     if ctx.market.index_close.empty or len(ctx.market.missing_symbols) == len(ctx.portfolio.symbols):
         ctx.data_error = "Không đủ dữ liệu để phân tích danh mục này (chưa có giá của các mã hoặc của VN-Index)."
         return ctx
-    ctx.report = build_health_report(ctx.portfolio, ctx.market, participation=state.participation_pct / 100)
+    ctx.report = build_health_report(ctx.portfolio, ctx.market, participation=ctx.participation, profile=ctx.profile)
     return ctx
 
 
@@ -252,7 +295,8 @@ def _page(render, title: str, key: str, url: str, default: bool = False) -> st.P
 ctx.pages = {
     "home": _page(views.home, "Trang chủ", "home", "trang-chu", default=True),
     "overview": _page(views.overview, "Tổng quan", "overview", "tong-quan"),
-    "portfolio": _page(views.portfolio_input, "Nhập danh mục", "portfolio", "nhap-danh-muc"),
+    "portfolio": _page(views.portfolio_input, "Danh mục của bạn", "portfolio", "nhap-danh-muc"),
+    "whatif": _page(views.whatif, "Thử điều chỉnh", "whatif", "thu-dieu-chinh"),
     "alerts": _page(views.alerts, "Cảnh báo", "alerts", "canh-bao"),
     "allocation": _page(views.allocation, "Phân bổ", "allocation", "phan-bo"),
     "risk": _page(views.risk, "Rủi ro", "risk", "rui-ro"),
@@ -263,7 +307,7 @@ ctx.pages = {
 p = ctx.pages
 navigation = st.navigation({
     "Bắt đầu": [p["home"], p["portfolio"]],
-    "Kết quả kiểm tra": [p["overview"], p["alerts"], p["allocation"], p["risk"], p["liquidity"]],
+    "Kết quả kiểm tra": [p["overview"], p["alerts"], p["allocation"], p["risk"], p["liquidity"], p["whatif"]],
     "Thị trường & dữ liệu": [p["market"], p["method"]],
 })
 

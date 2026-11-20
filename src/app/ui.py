@@ -34,6 +34,10 @@ ICONS = {
     "reset": ":material/restart_alt:",
     "upload": ":material/upload_file:",
     "action": ":material/lightbulb:",
+    "whatif": ":material/tune:",
+    "add": ":material/add:",
+    "delete": ":material/delete:",
+    "profile": ":material/person_search:",
 }
 
 # Màu của st.badge theo mức đánh giá (màu trạng thái chỉ dùng cho trạng thái, không dùng cho chuỗi dữ liệu)

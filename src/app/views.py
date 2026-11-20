@@ -2,8 +2,8 @@
 Nội dung từng trang của ứng dụng. Mỗi hàm nhận AppContext (đã tính sẵn ở main.py) và vẽ một trang.
 
 Thứ tự trang trên thanh điều hướng:
-    Bắt đầu:              Trang chủ · Nhập danh mục
-    Kết quả kiểm tra:     Tổng quan · Cảnh báo · Phân bổ · Rủi ro · Thanh khoản & giảm sàn
+    Bắt đầu:              Trang chủ · Danh mục của bạn
+    Kết quả kiểm tra:     Tổng quan · Cảnh báo · Phân bổ · Rủi ro · Thanh khoản & giảm sàn · Thử điều chỉnh
     Thị trường & dữ liệu: Thị trường · Phương pháp & dữ liệu
 """
 from __future__ import annotations
@@ -22,9 +22,11 @@ from src.app.ui import (
     DATASET_LABELS, ICONS, KIND_LABELS, MODE_LABELS, RESULT_LABELS, STATUS_BADGE, format_date, format_time,
 )
 from src.finance.health import (
-    DANGER, DISCLAIMER, GOOD, INFO, WARNING, Check, HealthReport, count_by_status, num, overall_verdict, pct, vnd,
-    vnd_billion,
+    DANGER, DISCLAIMER, GOOD, INFO, WARNING, Check, HealthReport, RiskProfile, build_health_report, count_by_status,
+    num, overall_verdict, pct, vnd, vnd_billion,
 )
+from src.finance.examples import EXAMPLE_TOTAL, EXAMPLES
+from src.finance import whatif as whatif_calc
 from src.finance.market_data import MarketData
 from src.data.quality import sessions_collected
 from src.finance.portfolio import Portfolio
@@ -48,8 +50,14 @@ class AppContext:
     data_error: str = ""
     pages: dict[str, Any] = field(default_factory=dict)   # st.Page theo khóa, để tạo liên kết giữa các trang
     dark: bool = False                                    # người dùng chọn giao diện tối ở mục Cài đặt
-    save_portfolio: Callable[[pd.DataFrame, float], None] | None = None
+    save_portfolio: Callable[..., None] | None = None
     reset_portfolio: Callable[[], None] | None = None
+    load_example: Callable[[str], None] | None = None
+    active_example: str | None = None                     # khóa danh mục ví dụ đang dùng (None: tự nhập)
+    latest_prices: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))  # giá mới nhất mọi mã trong kho
+    symbol_names: dict[str, str] = field(default_factory=dict)                        # mã -> tên công ty
+    profile: RiskProfile | None = None                    # mức chịu rủi ro tự khai (tùy chọn)
+    participation: float = 0.2
 
 
 # ====================================================================== phần dùng chung
@@ -132,13 +140,13 @@ FEATURES = [  # (tên biểu tượng Material Symbols, tiêu đề, câu hỏi)
     ("monitoring", "Rủi ro thị trường", "Danh mục lên xuống mạnh đến đâu so với VN-Index?"),
     ("trending_down", "Kịch bản xấu", "Nếu cả thị trường giảm sàn, bạn mất bao nhiêu tiền?"),
 ]
-STEPS = [
-    ("Nhập danh mục", "Vào trang Nhập danh mục, gõ mã (vd FPT), số lượng, giá vốn và tiền mặt rồi bấm Lưu. "
-                      "Có thể tải file CSV nếu đã có sẵn."),
-    ("Xem kết luận", "Trang Tổng quan cho biết danh mục Khỏe, Cần theo dõi hay Cần xem lại, kèm 3 điểm cần chú ý "
-                     "nhất và 6 chỉ số chính."),
-    ("Đọc giải thích", "Trang Cảnh báo giải thích từng chỉ số: con số, ý nghĩa, ngưỡng lấy từ đâu và nên làm gì. "
-                       "Các trang còn lại có biểu đồ để xem kỹ hơn."),
+STEPS = [  # chu trình một lần khám: khai báo -> xét nghiệm & chẩn đoán -> kê đơn
+    ("Khai báo", "Chọn nhanh một danh mục ví dụ hoặc tự nhập các mã bạn đang nắm. Nếu muốn, khai thêm mức lỗ bạn "
+                 "chịu được để kết quả sát với bạn hơn (không bắt buộc)."),
+    ("Xét nghiệm và chẩn đoán", "Trang Tổng quan cho kết luận Khỏe, Cần theo dõi hay Cần xem lại. Trang Cảnh báo "
+                                "giải thích từng chỉ số: con số, ngưỡng lấy từ đâu và ý nghĩa."),
+    ("Kê đơn và thử điều chỉnh", "Mỗi cảnh báo có gợi ý \"Nên làm gì?\". Trang Thử điều chỉnh cho bạn đổi tỷ trọng "
+                                 "và xem ngay kết luận thay đổi ra sao trước khi quyết định."),
 ]
 FAQ = [
     ("Dữ liệu có phải theo thời gian thực không?",
@@ -146,7 +154,10 @@ FAQ = [
      "ngày làm việc khi máy có API key. Thanh bên luôn ghi rõ phiên mới nhất và thời điểm tải."),
     ("Ứng dụng có đọc tài khoản chứng khoán của tôi không?",
      "Không. Ứng dụng chỉ đọc dữ liệu thị trường, không đặt lệnh và không đọc tài khoản. Danh mục do bạn tự nhập "
-     "và chỉ nằm trong phiên làm việc trên máy của bạn."),
+     "hoặc chọn từ danh mục ví dụ (giá thật, số lượng giả định), và chỉ nằm trong phiên làm việc trên máy của bạn."),
+    ("Ứng dụng có khuyên tôi mua hay bán mã nào không?",
+     "Không. Các gợi ý \"Nên làm gì?\" chỉ là nguyên tắc quản trị rủi ro chung, còn trang Thử điều chỉnh là mô "
+     "phỏng do bạn tự chọn tỷ trọng. Đây là công cụ phân tích học thuật, không phải khuyến nghị đầu tư."),
     ("\"Cần xem lại\" nghĩa là danh mục đang lỗ?",
      "Không hẳn. Kết luận nói về mức rủi ro, không nói về lãi/lỗ: chỉ cần một tiêu chí vượt ngưỡng nghiêm trọng "
      "(ví dụ quá tập trung vào vài mã) là cần xem lại cách phân bổ."),
@@ -173,7 +184,7 @@ def home(ctx: AppContext) -> None:
             b1, b2 = st.columns(2)
             if b1.button("Xem kết quả kiểm tra", type="primary", icon=ICONS["overview"], width="stretch"):
                 st.switch_page(ctx.pages["overview"])
-            if b2.button("Nhập danh mục của bạn", icon=ICONS["portfolio"], width="stretch"):
+            if b2.button("Khai báo danh mục của bạn", icon=ICONS["portfolio"], width="stretch"):
                 st.switch_page(ctx.pages["portfolio"])
         with right:
             st.image(hero_art(ctx.dark), width="stretch")
@@ -185,7 +196,7 @@ def home(ctx: AppContext) -> None:
             st.markdown(f"**{title}**")
             st.caption(text)
 
-    st.html('<div class="section-title">Dùng trong <span class="glow">3 bước</span></div>')
+    st.html('<div class="section-title">Một lần khám gồm <span class="glow">3 bước</span></div>')
     for number, (column, (title, text)) in enumerate(zip(st.columns(3), STEPS), 1):
         with column.container(key=card_key("step" + title, "g"), height="stretch"):
             st.html(f'<span class="step-no">{number}</span><b>{title}</b>')
@@ -284,58 +295,290 @@ def overview(ctx: AppContext) -> None:
             st.page_link(ctx.pages[key], label=text, icon=ICONS[key])
 
 
-# ====================================================================== Nhập danh mục
+# ====================================================================== Danh mục của bạn
+
+def _saved_signature() -> tuple:
+    """Dấu nhận dạng danh mục đã lưu, để biết bản đang sửa có thay đổi chưa lưu không."""
+    state = st.session_state
+    rows = tuple((r.symbol, float(r.quantity), None if pd.isna(r.avg_cost) else float(r.avg_cost))
+                 for r in state.portfolio_rows.itertuples(index=False))
+    return rows, float(state.cash)
+
+
+def _draft_signature() -> tuple:
+    state = st.session_state
+    rows = tuple((r["symbol"], float(r["quantity"] or 0), r["avg_cost"]) for r in state.draft if r["symbol"])
+    return rows, float(state.draft_cash or 0)
+
+
+def _new_row(symbol: str = "", quantity: float = 100, avg_cost: float | None = None) -> dict:
+    state = st.session_state
+    state.row_counter = state.get("row_counter", 0) + 1
+    return {"id": state.row_counter, "symbol": symbol, "quantity": quantity, "avg_cost": avg_cost}
+
+
+def _load_draft_from_saved() -> None:
+    """Bản đang sửa = danh mục đã lưu (chạy khi mở trang lần đầu hoặc sau mỗi lần lưu)."""
+    state = st.session_state
+    state.draft = [_new_row(r.symbol, float(r.quantity), None if pd.isna(r.avg_cost) else float(r.avg_cost))
+                   for r in state.portfolio_rows.itertuples(index=False)]
+    state.draft_cash = float(state.cash)
+    state.draft_version = state.editor_version
+    state.cash_nonce = state.get("cash_nonce", 0) + 1   # tạo lại ô tiền mặt với giá trị mới
+
+
+def _add_row() -> None:
+    st.session_state.draft.append(_new_row())
+
+
+def _delete_row(row_id: int) -> None:
+    st.session_state.draft = [r for r in st.session_state.draft if r["id"] != row_id]
+
+
+def _clear_draft() -> None:
+    st.session_state.draft = [_new_row()]
+    st.session_state.draft_cash = 0.0
+    st.session_state.cash_nonce = st.session_state.get("cash_nonce", 0) + 1   # tạo lại ô tiền mặt
+
+
+def _sync_cell(row_id: int, field_name: str, widget_key: str) -> None:
+    """Ghi giá trị ô vừa sửa vào bản đang sửa (giữ được khi chuyển trang)."""
+    for row in st.session_state.draft:
+        if row["id"] == row_id:
+            row[field_name] = st.session_state[widget_key]
+
 
 def portfolio_input(ctx: AppContext) -> None:
-    page_header("Nhập danh mục", "Nhập các mã bạn đang nắm, số lượng, giá vốn và tiền mặt, rồi bấm Lưu danh mục. "
-                                 "Mọi trang phân tích sẽ tính lại theo danh mục này.")
+    page_header("Danh mục của bạn", "Chọn nhanh một danh mục ví dụ hoặc tự nhập các mã bạn đang nắm, rồi bấm "
+                                    "Lưu. Mọi trang kết quả sẽ tính theo danh mục đã lưu.")
     state = st.session_state
-    with st.form("portfolio_form", border=True):
-        edited = st.data_editor(
-            state.portfolio_rows, key=f"editor_{state.editor_version}", num_rows="dynamic", hide_index=True,
-            width="stretch",
-            column_config={
-                "symbol": st.column_config.TextColumn("Mã cổ phiếu", required=True, max_chars=10,
-                                                      help="Ví dụ: FPT, VCB. Mã niêm yết trên HOSE, HNX hoặc UPCoM."),
-                "quantity": st.column_config.NumberColumn("Số lượng (cổ phiếu)", min_value=0, step=100, format="%d"),
-                "avg_cost": st.column_config.NumberColumn("Giá vốn bình quân (đ/cổ phiếu)", min_value=0, step=50,
-                                                          format="%d", help="Để trống nếu không nhớ; khi đó không "
-                                                                            "tính được lãi/lỗ của mã đó."),
-            },
-        )
-        cash = st.number_input("Tiền mặt trong tài khoản (đ)", min_value=0.0, value=float(state.cash),
-                               step=1_000_000.0, format="%.0f")
-        submitted = st.form_submit_button("Lưu danh mục", type="primary", icon=ICONS["save"])
-    if submitted:
-        ctx.save_portfolio(edited, cash)
+    if state.get("draft_version") != state.editor_version:
+        _load_draft_from_saved()
+    if state.get("flash"):
+        st.success(state.pop("flash"), icon=":material/check_circle:")
 
-    if ctx.portfolio_error:
-        st.error(f"Danh mục chưa hợp lệ: {ctx.portfolio_error}")
+    # ---------------- 1. Chọn nhanh
+    st.html('<div class="section-title">Chọn nhanh</div>')
+    choices = [(k, ex.title, ex.description) for k, ex in EXAMPLES.items()]
+    choices.append(("empty", "Danh mục trống", "Tự nhập từ đầu các mã bạn đang nắm."))
+    for column, (key, title, text) in zip(st.columns(len(choices)), choices):
+        active = ctx.active_example == key
+        with column.container(key=card_key("example" + key, "g" if active else "p"), height="stretch"):
+            st.markdown(f"**{title}**" + ("  \n:violet-badge[:material/check: Đang dùng]" if active else ""))
+            st.caption(text)
+            if key == "empty":
+                st.button("Bắt đầu trống", key="use_empty", width="stretch", on_click=_clear_draft)
+            else:
+                if st.button("Dùng danh mục này", key=f"use_{key}", width="stretch", disabled=active,
+                             type="secondary"):
+                    ctx.load_example(key)
+    session = format_date(ctx.market.last_trading_date) if ctx.market else "mới nhất"
+    if ctx.active_example in EXAMPLES:
+        st.caption(f":material/info: Danh mục ví dụ: giá là giá đóng cửa thật từ SSI (phiên {session}); số lượng "
+                   f"nắm giữ là giả định, tổng khoảng {vnd(EXAMPLE_TOTAL)}, không phải tài khoản thật của ai.")
+
+    # ---------------- 2. Các mã đang nắm
+    st.html('<div class="section-title">Các mã đang nắm</div>')
+    prices, names = ctx.latest_prices, ctx.symbol_names
+    options = sorted(set(names) | set(prices.index) | {r["symbol"] for r in state.draft if r["symbol"]})
+    widths = [2.6, 1.3, 1.5, 1.2, 1.4, 0.9, 0.45]
+    values = {}
+    for row in state.draft:
+        price = prices.get(str(row["symbol"]).upper()) if row["symbol"] else None
+        values[row["id"]] = (row["quantity"] or 0) * price if price else 0.0
+    total = sum(values.values()) + float(state.draft_cash or 0)
+
+    with st.container(key=card_key("holdings", "p")):
+        header = st.columns(widths)
+        for column, text in zip(header, ["Mã cổ phiếu", "Số lượng", "Giá vốn (không bắt buộc)", "Giá đóng cửa",
+                                          "Giá trị", "Tỷ trọng", ""]):
+            column.caption(f"**{text}**")
+        problems = []
+        for row in state.draft:
+            rid = row["id"]
+            cols = st.columns(widths, vertical_alignment="center")
+            cols[0].selectbox(
+                "Mã cổ phiếu", options, index=options.index(row["symbol"]) if row["symbol"] in options else None,
+                key=f"sym_{rid}", placeholder="Gõ để tìm mã…", label_visibility="collapsed",
+                format_func=lambda s: f"{s} · {names[s]}" if names.get(s) else s, accept_new_options=True,
+                on_change=_sync_cell, args=(rid, "symbol", f"sym_{rid}"))
+            cols[1].number_input("Số lượng", min_value=0, step=100, value=int(row["quantity"] or 0),
+                                 key=f"qty_{rid}", label_visibility="collapsed",
+                                 on_change=_sync_cell, args=(rid, "quantity", f"qty_{rid}"))
+            cols[2].number_input("Giá vốn", min_value=0.0, step=100.0, value=row["avg_cost"], format="%.0f",
+                                 key=f"cost_{rid}", placeholder="để trống nếu không nhớ",
+                                 label_visibility="collapsed",
+                                 on_change=_sync_cell, args=(rid, "avg_cost", f"cost_{rid}"))
+            symbol = (row["symbol"] or "").upper()
+            price = prices.get(symbol) if symbol else None
+            cols[3].markdown(vnd(price) if price else ":gray[—]")
+            cols[4].markdown(vnd(values[rid]) if price else ":gray[—]")
+            cols[5].markdown(pct(values[rid] / total) if price and total else ":gray[—]")
+            cols[6].button("", icon=ICONS["delete"], key=f"del_{rid}", help="Xóa dòng này",
+                           on_click=_delete_row, args=(rid,))
+            if symbol and not price:
+                problems.append(f"**{symbol}** chưa có dữ liệu trong kho: "
+                                + ("bấm **Cập nhật** ở thanh bên sau khi lưu để tải từ SSI." if ctx.has_key
+                                   else "máy này chưa có API key SSI nên mã này sẽ tạm chưa được tính."))
+            if symbol and row["quantity"] and int(row["quantity"]) % 100:
+                problems.append(f"**{symbol}**: {int(row['quantity'])} cổ phiếu không phải bội số của 100 (lô chẵn "
+                                "trên HOSE). Vẫn tính được, chỉ lưu ý khi đặt lệnh thật.")
+        st.button("Thêm mã", icon=ICONS["add"], on_click=_add_row)
+
+    left, right = st.columns([1, 1.4], vertical_alignment="bottom")
+    cash_key = f"cash_{state.get('cash_nonce', 0)}"
+    left.number_input("Tiền mặt trong tài khoản (đ)", min_value=0.0, step=1_000_000.0, format="%.0f",
+                      value=float(state.draft_cash or 0), key=cash_key,
+                      on_change=_remember, args=("draft_cash", cash_key))
+    stock_value = sum(values.values())
+    right.markdown(f"**Tổng tài sản: {vnd(total)}** &nbsp; :gray[cổ phiếu {pct(stock_value / total) if total else '—'}"
+                   f" · tiền mặt {pct(float(state.draft_cash or 0) / total) if total else '—'}]")
+    for text in problems:
+        st.caption(f":material/warning: {text}")
+
+    changed = _draft_signature() != _saved_signature()
+    save_col, undo_col, note_col = st.columns([1.2, 1.2, 3], vertical_alignment="center")
+    if save_col.button("Lưu và kiểm tra", type="primary", icon=ICONS["save"], width="stretch", disabled=not changed):
+        rows = pd.DataFrame([{k: r[k] for k in ("symbol", "quantity", "avg_cost")} for r in state.draft if r["symbol"]],
+                            columns=["symbol", "quantity", "avg_cost"])
+        ctx.save_portfolio(rows, float(state.draft_cash or 0))
+    if undo_col.button("Bỏ thay đổi", icon=ICONS["reset"], width="stretch", disabled=not changed):
+        _load_draft_from_saved()
+        st.rerun()
+    if changed:
+        note_col.caption(":orange[:material/edit:] Có thay đổi chưa lưu: các trang kết quả vẫn đang dùng danh mục cũ.")
+    elif ctx.portfolio_error:
+        note_col.error(f"Danh mục chưa hợp lệ: {ctx.portfolio_error}")
     elif ctx.portfolio is not None:
-        st.success(f"Đang phân tích **{len(ctx.portfolio.symbols)} mã** ({', '.join(ctx.portfolio.symbols)}) và "
-                   f"**{vnd(ctx.portfolio.cash)}** tiền mặt.", icon=":material/check_circle:")
-        show_missing_symbols(ctx)
-        st.page_link(ctx.pages["overview"], label="Xem kết luận ở trang Tổng quan", icon=ICONS["overview"])
+        note_col.page_link(ctx.pages["overview"], label="Xem kết luận ở trang Tổng quan", icon=ICONS["overview"])
 
-    with st.expander("Tùy chọn khác: tải file CSV, đặt lại danh mục", icon=":material/tune:"):
-        st.markdown("**Tải danh mục từ file CSV**")
-        st.caption("File gồm 3 cột: `symbol` (mã), `quantity` (số lượng), `avg_cost` (giá vốn). "
+    # ---------------- 3. Tùy chọn
+    with st.expander("Tùy chọn: mức lỗ bạn chịu được (giúp kết quả sát với bạn hơn)", icon=ICONS["profile"]):
+        st.caption("Giống bước hỏi bệnh sử khi đi khám. Không bắt buộc: nếu bật, mục \"Mức lỗ trong một phiên xấu\" và "
+                   "\"Sụt giảm tối đa 1 năm\" sẽ được so với đúng mức bạn khai, thay vì chỉ để tham khảo.")
+        st.toggle("So kết quả với mức chịu lỗ của tôi", value=state.profile_on, key="profile_widget",
+                  on_change=_remember, args=("profile_on", "profile_widget"))
+        a, b = st.columns(2)
+        a.slider("Trong một phiên xấu, tôi chịu lỗ tối đa", 1.0, 10.0, value=float(state.max_daily_loss), step=0.5,
+                 format="%.1f%%", key="daily_widget", disabled=not state.profile_on,
+                 on_change=_remember, args=("max_daily_loss", "daily_widget"),
+                 help="So với VaR 95%: mức lỗ mà 95% số phiên không vượt quá.")
+        b.slider("Trong một năm, tôi chịu được danh mục giảm từ đỉnh tối đa", 5, 50, value=int(state.max_drawdown),
+                 step=5, format="%d%%", key="drawdown_widget", disabled=not state.profile_on,
+                 on_change=_remember, args=("max_drawdown", "drawdown_widget"),
+                 help="So với mức sụt giảm tối đa của danh mục trong 250 phiên gần nhất.")
+
+    with st.expander("Tùy chọn: nhập từ file CSV", icon=ICONS["upload"]):
+        st.caption("File gồm 3 cột: `symbol` (mã), `quantity` (số lượng), `avg_cost` (giá vốn, có thể để trống). "
                    "Thêm một dòng `CASH` với `quantity` là số tiền mặt nếu muốn.")
         uploaded = st.file_uploader("Chọn file CSV", type="csv", label_visibility="collapsed")
         if uploaded is not None and state.get("uploaded_name") != uploaded.name:
             try:
                 frame = pd.read_csv(uploaded, dtype={"symbol": str})
                 is_cash = frame["symbol"].str.upper().str.strip() == "CASH"
+                state.uploaded_name = uploaded.name
                 ctx.save_portfolio(frame.loc[~is_cash, ["symbol", "quantity", "avg_cost"]],
                                    float(frame.loc[is_cash, "quantity"].sum()))
-                state.uploaded_name = uploaded.name
             except (KeyError, ValueError) as exc:
                 st.error(f"Không đọc được file: {exc}")
-        st.divider()
-        st.markdown("**Đặt lại danh mục mặc định**")
-        st.caption("Danh mục mặc định: 500.000.000 đ chia cho FPT, VCB, MBB, HPG, SSI, MWG và tiền mặt.")
-        if st.button("Đặt lại", icon=ICONS["reset"]):
-            ctx.reset_portfolio()
+
+
+# ====================================================================== Thử điều chỉnh
+
+def _whatif_weights_key() -> str:
+    return f"whatif_{st.session_state.editor_version}"
+
+
+def _set_whatif(weights: dict[str, float]) -> None:
+    state = st.session_state
+    state[_whatif_weights_key()] = dict(weights)
+    state.whatif_nonce = state.get("whatif_nonce", 0) + 1   # tạo lại thanh kéo với giá trị mới
+
+
+def _sync_whatif(symbol: str, widget_key: str) -> None:
+    st.session_state[_whatif_weights_key()][symbol] = st.session_state[widget_key]
+
+
+def whatif(ctx: AppContext) -> None:
+    page_header("Thử điều chỉnh", "Đổi tỷ trọng các mã bạn đang có và xem ngay kết luận thay đổi ra sao, trước khi "
+                                  "quyết định. Đây là mô phỏng trên dữ liệu quá khứ, không phải khuyến nghị mua/bán.")
+    if not require_report(ctx):
+        return
+    state, report = st.session_state, ctx.report
+    valuation = report.valuation.dropna(subset=["price"])
+    total = float(report.totals["total_value"])
+    prices = valuation.set_index("symbol")["price"]
+    current = {r.symbol: round(float(r.weight_total) * 100, 1) for r in valuation.itertuples()}
+    if _whatif_weights_key() not in state:
+        state[_whatif_weights_key()] = dict(current)
+    weights = state[_whatif_weights_key()]
+    nonce = state.get("whatif_nonce", 0)
+
+    left, right = st.columns([1, 1.5], gap="large")
+    with left.container(key=card_key("whatif-controls", "p")):
+        st.markdown("**Tỷ trọng mới (% tổng tài sản)**")
+        for symbol in current:
+            st.slider(symbol, 0.0, 100.0, value=float(weights.get(symbol, current[symbol])), step=0.5,
+                      format="%.1f%%", key=f"wi_{nonce}_{symbol}", on_change=_sync_whatif,
+                      args=(symbol, f"wi_{nonce}_{symbol}"),
+                      help=f"Hiện tại: {current[symbol]:.1f}%".replace(".", ","))
+        invested = sum(weights.get(s, 0.0) for s in current)
+        cash_share = 100 - invested
+        if cash_share < -1e-9:
+            st.error(f"Tổng tỷ trọng cổ phiếu là {invested:.1f}%, vượt 100%. Hãy giảm bớt một vài mã.".replace(".", ","))
+        else:
+            st.markdown(f"Tiền mặt còn lại: **{cash_share:.1f}%**".replace(".", ","))
+        st.caption("Gợi ý nhanh:")
+        a, b, c = st.columns(3)
+        if a.button("Hiện tại", width="stretch", help="Trả về tỷ trọng đang có"):
+            _set_whatif(current)
+            st.rerun()
+        if b.button("Chia đều", width="stretch", help="Chia đều phần cổ phiếu hiện có cho các mã"):
+            equal = sum(current.values()) / len(current)
+            _set_whatif({s: round(equal, 1) for s in current})
+            st.rerun()
+        if c.button("≤ 10%/mã", width="stretch", help="Giảm mã nào trên 10% về 10% (mốc UCITS), phần thừa "
+                                                          "chuyển sang tiền mặt"):
+            _set_whatif({s: min(w, 10.0) for s, w in current.items()})
+            st.rerun()
+
+    with right:
+        if cash_share < -1e-9:
+            st.info("Điều chỉnh để tổng tỷ trọng cổ phiếu không quá 100% thì kết quả sẽ hiện ở đây.")
+            return
+        avg_costs = valuation.set_index("symbol")["avg_cost"].to_dict()
+        simulated_portfolio = whatif_calc.portfolio_from_weights({s: weights.get(s, 0.0) / 100 for s in current},
+                                                            prices, total, avg_costs)
+        if simulated_portfolio.holdings.empty:
+            st.info("Hãy giữ ít nhất một mã có tỷ trọng lớn hơn 0 để có kết quả.")
+            return
+        simulated = build_health_report(simulated_portfolio, ctx.market, participation=ctx.participation,
+                                        profile=ctx.profile)
+        before_level, before_label, _ = overall_verdict(report.checks)
+        after_level, after_label, _ = overall_verdict(simulated.checks)
+        with st.container(key=card_key("whatif-verdict", "g")):
+            st.markdown(f"**Kết luận chung** &nbsp; {badge(before_level, before_label)} &nbsp;→&nbsp; "
+                        f"{badge(after_level, after_label)}")
+            changes = whatif_calc.changed_checks(report, simulated)
+            if changes.empty:
+                st.caption("Chưa có tiêu chí nào đổi mức đánh giá.")
+            remaining = [c for c in simulated.checks if c.status in (DANGER, WARNING)]
+            remaining.sort(key=lambda c: c.status != DANGER)
+            if remaining:
+                st.caption("Còn cần chú ý: " + "; ".join(f"{c.name} ({c.value}, {c.status.lower()})"
+                                                         for c in remaining[:4]))
+            for item in changes.itertuples():
+                arrow = ":green[:material/arrow_upward:]" if item.direction == "tốt lên" else \
+                    ":red[:material/arrow_downward:]"
+                st.markdown(f"{arrow} **{item.name}**: {item.value_before} → {item.value_after} "
+                            f"({badge(item.before)} → {badge(item.after)})")
+        st.table(whatif_calc.compare_reports(report, simulated), hide_index=True, border="horizontal")
+        rows, cash = whatif_calc.to_lots(simulated_portfolio, prices)
+        st.caption("Áp dụng sẽ đổi danh mục của bạn theo tỷ trọng mới, số lượng làm tròn theo lô 100 cổ phiếu "
+                   "(tỷ trọng thật có thể lệch nhẹ). Bạn vẫn có thể sửa lại ở trang Danh mục của bạn.")
+        unchanged = all(abs(weights.get(sym, 0.0) - w) < 0.05 for sym, w in current.items())
+        if st.button("Áp dụng vào danh mục của tôi", type="primary", icon=ICONS["save"], disabled=unchanged):
+            ctx.save_portfolio(rows, cash)
 
 
 # ====================================================================== Cảnh báo
@@ -603,7 +846,10 @@ LIMITS = [
     ("tune", "Giả định tỷ trọng cố định và tỷ lệ tham gia thanh khoản là đơn giản hóa."),
     ("policy", "Ngưỡng UCITS và SEC là chuẩn tham chiếu của quỹ đầu tư, không bắt buộc với nhà đầu tư cá nhân; "
                "ngưỡng ngành 50% là quy tắc tự đặt."),
-    ("person", "Danh mục do người dùng tự nhập; ứng dụng không đọc tài khoản chứng khoán thật."),
+    ("person", "Danh mục do người dùng tự nhập hoặc chọn từ 3 danh mục ví dụ (giá thật, số lượng giả định); ứng dụng "
+               "không đọc tài khoản chứng khoán thật."),
+    ("tune", "Thử điều chỉnh là mô phỏng trên dữ liệu quá khứ, không phải khuyến nghị mua/bán; mức chịu lỗ do người "
+             "dùng tự khai nên chỉ phản ánh cảm nhận của chính họ."),
     ("receipt_long", "Không tính thuế, phí giao dịch, cổ tức tiền mặt và lãi tiền gửi."),
 ]
 

@@ -25,7 +25,7 @@ LOG_DIR = PROJECT_ROOT / "logs"             # nhật ký chạy chương trình 
 SAMPLE_DIR = PROJECT_ROOT / "data_sample"   # bản dữ liệu SSI lưu kèm mã nguồn (có đưa lên GitHub)
 DB_PATH = DATA_DIR / "portfolio.db"         # kho SQLite
 SAMPLE_DB_PATH = SAMPLE_DIR / "sample.db"   # bản chốt dữ liệu thật, dùng khi máy chưa có kho data/ và API key
-DEMO_PORTFOLIO_PATH = SAMPLE_DIR / "demo_portfolio.csv"   # danh mục mặc định khi mở ứng dụng
+DEMO_PORTFOLIO_PATH = SAMPLE_DIR / "demo_portfolio.csv"   # dự phòng khi máy chưa có kho dữ liệu nào
 
 # ----- Múi giờ: mọi dấu thời gian lưu và hiển thị theo giờ Việt Nam (yêu cầu Mục 4 của đề) -----
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -43,7 +43,7 @@ SSI_MAX_DAYS_PER_REQUEST = 365   # endpoint ohlc: chia khoảng thời gian dài
 SSI_SUMMARY_MAX_DAYS = 120
 
 # ----- Cập nhật dữ liệu -----
-DEFAULT_SYMBOLS = ["FPT", "HPG", "VCB", "MBB", "SSI", "MWG"]  # các mã của danh mục mặc định
+DEFAULT_SYMBOLS = ["FPT", "HPG", "VCB", "MBB", "SSI", "MWG"]  # nhóm mã theo dõi chính (cộng với dải giá bên dưới)
 # Các cổ phiếu vốn hóa lớn thêm vào dải giá chạy ngang (thuộc rổ VN30, nhiều ngành). Tải đủ lịch sử như mọi mã
 # khác, nên người dùng thêm các mã này vào danh mục là phân tích được ngay.
 TICKER_SYMBOLS = ["ACB", "BID", "CTG", "TCB", "VPB", "VNM", "MSN", "VIC", "VHM", "GAS"]

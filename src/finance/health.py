@@ -38,6 +38,19 @@ class Check:
     action: str = ""    # "Nên làm gì?": gợi ý chung về quản trị rủi ro, KHÔNG khuyến nghị mua/bán mã cụ thể
 
 
+@dataclass(frozen=True)
+class RiskProfile:
+    """Mức chịu rủi ro do người dùng TỰ KHAI (tùy chọn) - bước "hỏi bệnh sử" của một lần khám.
+
+    Giống bước đánh giá mức độ phù hợp khi mở tài khoản chứng khoán: hỏi nhà đầu tư chịu lỗ được bao nhiêu.
+    Khi có, VaR và sụt giảm tối đa được so với chính các mức này (thay vì "không có ngưỡng chuẩn").
+        max_daily_loss  lỗ tối đa chấp nhận trong một phiên xấu, tỷ lệ (vd 0.03 = 3%)
+        max_drawdown    mức giảm tối đa từ đỉnh chấp nhận trong một năm, tỷ lệ dương (vd 0.20 = 20%)
+    """
+    max_daily_loss: float
+    max_drawdown: float
+
+
 @dataclass
 class HealthReport:
     valuation: pd.DataFrame
@@ -127,7 +140,8 @@ def vnd_billion(value: float) -> str:
 
 
 def build_health_report(portfolio: Portfolio, market: MarketData,
-                        participation: float = liquidity.DEFAULT_PARTICIPATION) -> HealthReport:
+                        participation: float = liquidity.DEFAULT_PARTICIPATION,
+                        profile: RiskProfile | None = None) -> HealthReport:
     notes: list[str] = []
     if market.missing_symbols:
         notes.append(f"Chưa có dữ liệu cho: {', '.join(market.missing_symbols)}. Các mã này bị loại khỏi phép tính.")
@@ -171,12 +185,13 @@ def build_health_report(portfolio: Portfolio, market: MarketData,
 
     report = HealthReport(valuation, totals, sectors, liq, metrics, stress_1, stress_3, port_ret, market_ret,
                           notes=notes, backtest=backtest_var(port_ret))
-    _add_checks(report, ucits, n_eff, sectors, illiquid, participation, market)
+    _add_checks(report, ucits, n_eff, sectors, illiquid, participation, market, profile)
     return report
 
 
 def _add_checks(report: HealthReport, ucits: dict, n_eff: float, sectors: pd.Series,
-                illiquid: float, participation: float, market: MarketData) -> None:
+                illiquid: float, participation: float, market: MarketData,
+                profile: RiskProfile | None = None) -> None:
     add = report.checks.append
     m, total = report.metrics, report.totals["total_value"]
 
@@ -272,13 +287,25 @@ def _add_checks(report: HealthReport, ucits: dict, n_eff: float, sectors: pd.Ser
         {WARNING: "Rủi ro riêng giảm được bằng đa dạng hóa: thêm mã ở ngành khác hoặc giảm tỷ trọng mã lớn.",
          GOOD: "Rủi ro chủ yếu đến từ thị trường chung, đa dạng hóa thêm sẽ ít tác dụng.", INFO: ""}[r2_status],
     ))
+    var_pct = m["var_pct"]
+    if profile is not None and var_pct == var_pct:
+        var_status = GOOD if var_pct <= profile.max_daily_loss else WARNING
+        var_threshold = f"≤ {pct(profile.max_daily_loss, 1)} (mức bạn chịu được)"
+        var_source = "Jorion (2007), mô phỏng lịch sử; ngưỡng do bạn tự khai"
+        var_action = ("Nằm trong mức bạn chịu được." if var_status == GOOD else
+                      "Vượt mức bạn chịu được: cân nhắc giảm tỷ trọng cổ phiếu biến động mạnh hoặc giữ thêm tiền mặt "
+                      "(thử ở trang Thử điều chỉnh).")
+    else:
+        var_status, var_threshold = INFO, "Không có ngưỡng chuẩn (khai mức chịu lỗ để so)"
+        var_source = "Jorion (2007), mô phỏng lịch sử"
+        var_action = ("Nếu mức lỗ này vượt khả năng chịu đựng của bạn, cân nhắc giảm tỷ trọng cổ phiếu hoặc giữ thêm "
+                      "tiền mặt.")
     add(Check(
-        "Rủi ro thị trường", "Mức lỗ trong một phiên xấu (VaR 95%)", f"{pct(m['var_pct'])} ≈ {vnd(m['var_amount'])}",
-        INFO, "Không có ngưỡng chuẩn",
-        (f"Trong 100 phiên, khoảng 95 phiên danh mục không lỗ quá {pct(m['var_pct'])} "
+        "Rủi ro thị trường", "Mức lỗ trong một phiên xấu (VaR 95%)", f"{pct(var_pct)} ≈ {vnd(m['var_amount'])}",
+        var_status, var_threshold,
+        (f"Trong 100 phiên, khoảng 95 phiên danh mục không lỗ quá {pct(var_pct)} "
          f"(≈ {vnd(m['var_amount'])}); 5 phiên còn lại có thể lỗ nhiều hơn. Tính trên 250 phiên gần nhất."),
-        "Jorion (2007), mô phỏng lịch sử",
-        "Nếu mức lỗ này vượt khả năng chịu đựng của bạn, cân nhắc giảm tỷ trọng cổ phiếu hoặc giữ thêm tiền mặt.",
+        var_source, var_action,
     ))
     bt = report.backtest
     if bt is not None and bt.observations:
@@ -307,11 +334,24 @@ def _add_checks(report: HealthReport, ucits: dict, n_eff: float, sectors: pd.Ser
             "Kupiec (1995); Christoffersen (1998)",
             bt_action,
         ))
+    drawdown = abs(m["max_drawdown_1y"]) if m["max_drawdown_1y"] == m["max_drawdown_1y"] else float("nan")
+    if profile is not None and drawdown == drawdown:
+        dd_status = GOOD if drawdown <= profile.max_drawdown else WARNING
+        dd_threshold = f"≤ {pct(profile.max_drawdown, 0)} (mức bạn chịu được)"
+        dd_source = "Từ đỉnh xuống đáy của chuỗi giá trị danh mục; ngưỡng do bạn tự khai"
+        dd_action = ("Nằm trong mức bạn chịu được." if dd_status == GOOD else
+                     "Năm qua danh mục từng giảm sâu hơn mức bạn chịu được: nếu gặp lại, bạn có thể phải bán ở đáy. "
+                     "Cân nhắc giảm rủi ro (thử ở trang Thử điều chỉnh).")
+    else:
+        dd_status, dd_threshold = INFO, "Không có ngưỡng chuẩn (khai mức chịu lỗ để so)"
+        dd_source = "Từ đỉnh xuống đáy của chuỗi giá trị danh mục"
+        dd_action = ("Tự hỏi: nếu danh mục giảm chừng đó, bạn có phải bán ra không? Nếu có, mức rủi ro hiện tại có thể "
+                     "quá cao.")
     add(Check(
-        "Rủi ro thị trường", "Sụt giảm tối đa 1 năm (Max Drawdown)", pct(m["max_drawdown_1y"]), INFO, "",
-        f"Nếu nắm danh mục này trong 250 phiên vừa qua, có lúc giá trị giảm {pct(abs(m['max_drawdown_1y']))} so với đỉnh trước đó.",
-        "Từ đỉnh xuống đáy của chuỗi giá trị danh mục",
-        "Tự hỏi: nếu danh mục giảm chừng đó, bạn có phải bán ra không? Nếu có, mức rủi ro hiện tại có thể quá cao.",
+        "Rủi ro thị trường", "Sụt giảm tối đa 1 năm (Max Drawdown)", pct(m["max_drawdown_1y"]), dd_status,
+        dd_threshold,
+        f"Nếu nắm danh mục này trong 250 phiên vừa qua, có lúc giá trị giảm {pct(drawdown)} so với đỉnh trước đó.",
+        dd_source, dd_action,
     ))
     # 11. Kịch bản giảm sàn
     share_1 = m["floor_loss_1"] / total if total else float("nan")

@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src import config  # noqa: E402
 from src.data.storage import Storage  # noqa: E402
+from src.finance.examples import example_symbols  # noqa: E402
 from src.finance.portfolio import load_portfolio_csv  # noqa: E402
 
 SAMPLE_DB = config.SAMPLE_DB_PATH
@@ -66,8 +67,9 @@ def _copy_daily(target: Storage, table: str, frame) -> int:
 def main() -> None:
     if not config.DB_PATH.exists():
         sys.exit("[LỖI] Chưa có kho dữ liệu. Hãy chạy: python scripts/update_data.py")
-    portfolio = load_portfolio_csv(PORTFOLIO_CSV).symbols if PORTFOLIO_CSV.exists() else config.DEFAULT_SYMBOLS
-    symbols = list(dict.fromkeys(portfolio + config.TRACKED_SYMBOLS))  # danh mục mặc định + các mã của dải giá
+    portfolio = load_portfolio_csv(PORTFOLIO_CSV).symbols if PORTFOLIO_CSV.exists() else []
+    # các mã của 3 danh mục ví dụ + dải giá chạy ngang (+ danh mục trong file CSV dự phòng, nếu có)
+    symbols = list(dict.fromkeys(example_symbols() + config.TRACKED_SYMBOLS + portfolio))
     with Storage() as source:
         counts = export_sample(source, SAMPLE_DB, symbols, config.MARKET_INDEX)
     size_kb = SAMPLE_DB.stat().st_size / 1024

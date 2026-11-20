@@ -3,7 +3,8 @@ Báo cáo kiểm chứng (đưa vào Mục 7 của báo cáo): ghi ra thư mục
 
     chat_luong_du_lieu.md   mỗi mã: số phiên, phiên thiếu, dòng bị gắn cờ, giá đã điều chỉnh, đối chiếu lợi suất
     nhat_ky_thu_thap.md     số phiên dữ liệu trong kho; mỗi lần cập nhật: lúc nào, phiên nào, số chuỗi thành công/lỗi
-    kiem_dinh_var.md        kiểm định ngoài mẫu VaR 95% của danh mục mặc định (Kupiec, Christoffersen)
+    kiem_dinh_var.md        kiểm định ngoài mẫu VaR 95% của 3 danh mục ví dụ (Kupiec, Christoffersen)
+    so_sanh_danh_muc.md     so sánh kết quả kiểm tra của 3 danh mục ví dụ
 
 Mọi con số đều tính từ kho dữ liệu thật (data/portfolio.db; nếu chưa có thì data_sample/sample.db).
 
@@ -23,9 +24,11 @@ import pandas as pd  # noqa: E402
 from src import config  # noqa: E402
 from src.data.quality import collection_summary, cross_mismatch_details, quality_table, sessions_collected  # noqa: E402
 from src.data.storage import Storage  # noqa: E402
-from src.finance.health import build_health_report, num, pct  # noqa: E402
+from src.finance.examples import EXAMPLE_TOTAL, EXAMPLES, build_example, example_symbols  # noqa: E402
+from src.finance.health import build_health_report, count_by_status, num, pct, vnd  # noqa: E402
+from src.finance.whatif import key_metrics  # noqa: E402
 from src.finance.market_data import load_market_data  # noqa: E402
-from src.finance.portfolio import load_portfolio_csv  # noqa: E402
+from src.finance.portfolio import build_portfolio  # noqa: E402
 
 OUT_DIR = config.PROJECT_ROOT / "docs" / "kiem_chung"
 
@@ -36,6 +39,16 @@ def _table(frame: pd.DataFrame) -> str:
     line = "| " + " | ".join("---" for _ in frame.columns) + " |"
     body = ["| " + " | ".join(str(v) for v in row) + " |" for row in frame.itertuples(index=False)]
     return "\n".join([header, line, *body])
+
+
+def latest_close(storage: Storage, symbols: list[str]) -> pd.Series:
+    """Giá đóng cửa phiên mới nhất của từng mã."""
+    prices = {}
+    for symbol in symbols:
+        frame = storage.load_daily("stock_daily", symbol).tail(1)
+        if not frame.empty:
+            prices[symbol] = float(frame["close"].iloc[0])
+    return pd.Series(prices, dtype=float)
 
 
 def _vn(value: float, digits: int = 2) -> str:
@@ -58,9 +71,12 @@ def main() -> None:
         quality = quality_table(storage, config.TRACKED_SYMBOLS)
         mismatches = cross_mismatch_details(storage, config.TRACKED_SYMBOLS)
         summary = collection_summary(storage.load_fetch_log(limit=100_000), storage.trading_calendar(config.MARKET_INDEX))
-        portfolio = load_portfolio_csv(config.DEMO_PORTFOLIO_PATH)
-        market = load_market_data(storage, portfolio.symbols)
-    report = build_health_report(portfolio, market)
+        prices = latest_close(storage, example_symbols())
+        reports = {}
+        for key in EXAMPLES:
+            rows, cash = build_example(key, prices)
+            portfolio = build_portfolio(pd.concat([rows, pd.DataFrame({"symbol": ["CASH"], "quantity": [cash]})]))
+            reports[key] = build_health_report(portfolio, load_market_data(storage, portfolio.symbols))
 
     # 1. Chất lượng dữ liệu
     view = quality.rename(columns={
@@ -108,34 +124,53 @@ def main() -> None:
               "nên không mất phiên nào.\n\n" + _table(log_view) + "\n")
     (OUT_DIR / "nhat_ky_thu_thap.md").write_text(text, encoding="utf-8")
 
-    # 3. Kiểm định VaR
-    bt = report.backtest
-    pof_text = "Đạt" if bt.passes_pof else ("Không đạt - vượt ít hơn kỳ vọng (VaR thận trọng)"
-                                              if bt.too_few_exceptions else "Không đạt - vượt nhiều hơn kỳ vọng")
-    verdict = (pof_text, "Đạt" if bt.passes_independence else "Không đạt - các lần vượt dồn cục")
-    text = (_header("Kiểm định ngoài mẫu VaR 95% (danh mục mặc định)", db_path)
-            + "VaR lịch sử 1 ngày, cửa sổ trượt 250 phiên; VaR của mỗi ngày chỉ dùng dữ liệu trước ngày đó. "
-              "Danh mục giữ tỷ trọng hiện tại trong suốt giai đoạn.\n\n"
-            + _table(pd.DataFrame([
-                ["Số ngày kiểm định", bt.observations],
-                ["Từ ngày – đến ngày", f"{bt.series.index.min()} – {bt.series.index.max()}" if bt.observations else "—"],
-                ["Số lần lỗ vượt VaR", bt.exceptions],
-                ["Tỷ lệ vượt thực tế / kỳ vọng", f"{pct(bt.exception_rate, 2)} / {pct(bt.expected_rate, 0)}"],
-                ["Kupiec (1995): LR / p-value / kết luận", f"{num(bt.lr_pof, 3)} / {num(bt.p_pof, 3)} / {verdict[0]}"],
-                ["Christoffersen (1998): LR / p-value / kết luận",
-                 f"{num(bt.lr_ind, 3)} / {num(bt.p_ind, 3)} / {verdict[1]}"],
-            ], columns=["Chỉ tiêu", "Giá trị"])) + "\n\nMức ý nghĩa 5%: p-value ≥ 0,05 thì không bác bỏ giả thuyết mô hình đúng.\n")
+    # 3. Kiểm định VaR cho từng danh mục ví dụ
+    var_rows = []
+    for key, report in reports.items():
+        bt = report.backtest
+        pof = "Đạt" if bt.passes_pof else ("Không đạt (VaR thận trọng)" if bt.too_few_exceptions
+                                           else "Không đạt (vượt nhiều hơn kỳ vọng)")
+        ind = "Đạt" if bt.passes_independence else "Không đạt (dồn cục)"
+        var_rows.append([EXAMPLES[key].title, bt.observations, bt.exceptions,
+                         f"{pct(bt.exception_rate, 2)}", f"{num(bt.p_pof, 3)} – {pof}", f"{num(bt.p_ind, 3)} – {ind}"])
+    first = next(iter(reports.values())).backtest
+    span_bt = f"{first.series.index.min()} – {first.series.index.max()}" if first.observations else "—"
+    text = (_header("Kiểm định ngoài mẫu VaR 95% (3 danh mục ví dụ)", db_path)
+            + "VaR lịch sử 1 ngày, cửa sổ trượt 250 phiên; VaR của mỗi ngày chỉ dùng dữ liệu trước ngày đó. Mỗi "
+              f"danh mục giữ tỷ trọng hiện tại trong suốt giai đoạn ({span_bt}). Tỷ lệ vượt kỳ vọng: 5%.\n\n"
+            + _table(pd.DataFrame(var_rows, columns=["Danh mục", "Số ngày kiểm định", "Số lần vượt", "Tỷ lệ vượt",
+                                                     "Kupiec (1995): p-value", "Christoffersen (1998): p-value"]))
+            + "\n\nMức ý nghĩa 5%: p-value ≥ 0,05 thì không bác bỏ giả thuyết mô hình đúng.\n")
     (OUT_DIR / "kiem_dinh_var.md").write_text(text, encoding="utf-8")
 
-    print(f"Đã ghi 3 file vào {OUT_DIR}")
+    # 4. So sánh 3 danh mục ví dụ (kiểm tra tính hợp lý: danh mục đa dạng hơn phải có kết quả tập trung tốt hơn)
+    metrics = {EXAMPLES[key].title: key_metrics(report) for key, report in reports.items()}
+    compare = pd.DataFrame(metrics)
+    compare.insert(0, "Chỉ số", compare.index)
+    lines = []
+    for key, report in reports.items():
+        counts = count_by_status(report.checks)
+        lines.append(f"- **{EXAMPLES[key].title}**: {EXAMPLES[key].description} Số tiêu chí: "
+                     + ", ".join(f"{level} {n}" for level, n in counts.items()) + ".")
+    text = (_header("So sánh 3 danh mục ví dụ", db_path)
+            + f"Danh mục giả định, mỗi danh mục khoảng {vnd(EXAMPLE_TOTAL)}, số lượng làm tròn theo lô 100 cổ phiếu "
+              "theo giá đóng cửa phiên mới nhất trong kho. Các danh mục được chọn theo cấu trúc, không chỉnh để ra "
+              "kết quả đẹp.\n\n" + "\n".join(lines) + "\n\n" + _table(compare.reset_index(drop=True)) + "\n")
+    (OUT_DIR / "so_sanh_danh_muc.md").write_text(text, encoding="utf-8")
+
+    print(f"Đã ghi 4 file vào {OUT_DIR}")
     print(f"   Chất lượng: {len(quality)} mã, {total_missing} phiên thiếu, {total_mismatch} phiên lệch > 1 điểm %")
     for row in mismatches.itertuples(index=False):
         print(f"      Lệch: {row.symbol} ngày {row.trading_date}: tự tính {row.computed_pct:.2f}%, SSI {row.reported_pct:.2f}%, "
               f"giá tham chiếu / đóng cửa trước = {row.ratio_prev_close:.4f}")
     print(f"   Thu thập: kho có {len(calendar)} phiên ({span}); ứng dụng đã chạy cập nhật vào {len(sessions)} phiên "
           f"({', '.join(sessions)})")
-    print(f"   Kiểm định VaR: {bt.exceptions}/{bt.observations} ngày vượt ({pct(bt.exception_rate, 2)}), "
-          f"Kupiec p = {num(bt.p_pof, 3)} ({verdict[0]}), Christoffersen p = {num(bt.p_ind, 3)} ({verdict[1]})")
+    for row in var_rows:
+        print(f"   Kiểm định VaR – {row[0]}: {row[2]}/{row[1]} ngày vượt ({row[3]}), Kupiec p = {row[4]}, "
+              f"Christoffersen p = {row[5]}")
+    for title, values in metrics.items():
+        print(f"   {title}: kết luận {values['Kết luận chung']}, mã lớn nhất {values['Mã lớn nhất']}, "
+              f"VaR {values['Mức lỗ phiên xấu (VaR 95%)']}")
 
 
 if __name__ == "__main__":

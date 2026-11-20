@@ -205,11 +205,11 @@ if "portfolio_rows" not in state:
     state.ssi_status = ("unknown", "")
     state.participation_pct = 20
     state.period = "1 năm"
-    state.profile_on, state.max_daily_loss, state.max_drawdown = False, 3.0, 20   # hỏi bệnh sử: mặc định tắt
+    state.profile_on, state.max_daily_loss, state.max_drawdown = False, 3.0, 20   # mức chịu lỗ tự khai: mặc định tắt
 
 
-def save_portfolio(rows: pd.DataFrame, cash: float, example: str | None = None) -> None:
-    """Lưu danh mục (trang Danh mục của bạn, file CSV hoặc trang Thử điều chỉnh). `example`: khóa danh mục ví dụ."""
+def save_portfolio(rows: pd.DataFrame, cash: float, example: str | None = None, go: bool = False) -> None:
+    """Lưu danh mục (trang Nhập danh mục, file CSV hoặc trang Thử điều chỉnh). `example`: khóa danh mục ví dụ."""
     rows = rows.dropna(how="all")
     try:
         parsed = build_portfolio(pd.concat([rows, pd.DataFrame({"symbol": [CASH_SYMBOL], "quantity": [cash]})],
@@ -221,6 +221,7 @@ def save_portfolio(rows: pd.DataFrame, cash: float, example: str | None = None) 
     state.active_example = example
     state.editor_version += 1
     state.flash = "Đã lưu danh mục. Các trang kết quả đã tính lại theo danh mục mới."
+    state.go_overview = go          # True: chuyển sang trang Tổng quan sau khi lưu
     st.rerun()
 
 
@@ -295,7 +296,7 @@ def _page(render, title: str, key: str, url: str, default: bool = False) -> st.P
 ctx.pages = {
     "home": _page(views.home, "Trang chủ", "home", "trang-chu", default=True),
     "overview": _page(views.overview, "Tổng quan", "overview", "tong-quan"),
-    "portfolio": _page(views.portfolio_input, "Danh mục của bạn", "portfolio", "nhap-danh-muc"),
+    "portfolio": _page(views.portfolio_input, "Nhập danh mục", "portfolio", "nhap-danh-muc"),
     "whatif": _page(views.whatif, "Thử điều chỉnh", "whatif", "thu-dieu-chinh"),
     "alerts": _page(views.alerts, "Cảnh báo", "alerts", "canh-bao"),
     "allocation": _page(views.allocation, "Phân bổ", "allocation", "phan-bo"),
@@ -305,11 +306,16 @@ ctx.pages = {
     "method": _page(views.method, "Phương pháp & dữ liệu", "method", "phuong-phap"),
 }
 p = ctx.pages
-navigation = st.navigation({
-    "Bắt đầu": [p["home"], p["portfolio"]],
-    "Kết quả kiểm tra": [p["overview"], p["alerts"], p["allocation"], p["risk"], p["liquidity"], p["whatif"]],
-    "Thị trường & dữ liệu": [p["market"], p["method"]],
+navigation = st.navigation({   # nhóm menu theo quy trình 3 bước
+    "": [p["home"]],
+    "1 · Hồ sơ danh mục": [p["portfolio"]],
+    "2 · Xem kết quả": [p["overview"], p["alerts"], p["allocation"], p["risk"], p["liquidity"]],
+    "3 · Phương án cải thiện": [p["whatif"]],
+    "Tham khảo": [p["market"], p["method"]],
 })
+current_key = next((k for k, page in p.items() if page.title == navigation.title), "home")
+if state.pop("go_overview", False):
+    st.switch_page(p["overview"])
 
 
 # ====================================================================== khung "Dữ liệu" ở thanh bên
@@ -382,3 +388,4 @@ if state.ssi_status[0] == "error":
              icon=":material/cloud_off:")
 
 navigation.run()
+views.page_footer(ctx, current_key)   # nút Trước/Tiếp ở cuối mọi trang

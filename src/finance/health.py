@@ -309,28 +309,30 @@ def _add_checks(report: HealthReport, ucits: dict, n_eff: float, sectors: pd.Ser
     ))
     bt = report.backtest
     if bt is not None and bt.observations:
+        # Mục này đánh giá CÔNG CỤ ĐO (mô hình VaR), không đánh giá danh mục -> luôn ở mức Thông tin, không tính vào
+        # kết luận chung (giống máy đo huyết áp bị lệch thì không ghi vào kết quả là người bệnh có vấn đề).
         if bt.passes_pof and bt.passes_independence:
-            bt_status = GOOD
-            bt_action = "Mô hình VaR đạt kiểm định: có thể dùng con số VaR làm tham khảo."
+            bt_result = "Mô hình VaR đạt cả hai kiểm định."
+            bt_action = "Có thể dùng con số VaR ở mục trên làm tham khảo."
         elif not bt.passes_independence:
-            bt_status = WARNING
-            bt_action = ("Các ngày lỗ vượt VaR có xu hướng dồn vào cùng giai đoạn: khi thị trường xấu, lỗ có thể "
-                         "kéo dài nhiều phiên liền, đừng xem VaR như mức lỗ tối đa.")
+            bt_result = ("Số lần vượt hợp lý nhưng các lần vượt dồn vào cùng giai đoạn: VaR phản ứng chậm khi thị "
+                         "trường đột ngột xấu đi." if bt.passes_pof else
+                         "Các lần vượt dồn vào cùng giai đoạn: VaR phản ứng chậm khi thị trường đột ngột xấu đi.")
+            bt_action = ("Trong giai đoạn biến động mạnh, lỗ có thể vượt VaR nhiều phiên liền: đừng xem VaR như mức lỗ "
+                         "tối đa.")
         elif bt.too_few_exceptions:
-            bt_status = INFO
-            bt_action = ("VaR đang thận trọng (lỗ thực tế ít khi vượt mức dự báo): con số VaR có thể cao hơn rủi ro "
-                         "thực tế, dùng làm tham khảo theo hướng an toàn.")
+            bt_result = "Lỗ thực tế ít khi vượt mức dự báo: VaR đang thận trọng (ước lượng lỗ cao hơn thực tế)."
+            bt_action = "Con số VaR có thể cao hơn rủi ro thực tế; dùng làm tham khảo theo hướng an toàn."
         else:
-            bt_status = WARNING
-            bt_action = ("Lỗ thực tế vượt VaR nhiều hơn kỳ vọng: xem con số VaR như mức tối thiểu, thực tế có thể "
-                         "lỗ nhiều hơn.")
+            bt_result = "Lỗ thực tế vượt VaR nhiều hơn kỳ vọng: VaR đang đánh giá thấp rủi ro."
+            bt_action = "Xem con số VaR như mức tối thiểu, thực tế có thể lỗ nhiều hơn."
         add(Check(
             "Rủi ro thị trường", "Độ tin cậy của VaR (kiểm định ngoài mẫu)",
-            f"{bt.exceptions}/{bt.observations} ngày vượt VaR ({pct(bt.exception_rate)})", bt_status,
-            "Tỷ lệ vượt gần 5%; p-value Kupiec và Christoffersen ≥ 5%",
+            f"{bt.exceptions}/{bt.observations} ngày vượt VaR ({pct(bt.exception_rate)})", INFO,
+            "Đánh giá công cụ đo, không tính vào kết luận chung",
             (f"Tính lại VaR từng ngày trong {bt.observations} phiên quá khứ (chỉ dùng dữ liệu trước ngày đó, giữ tỷ "
              f"trọng hiện tại): lỗ thực tế vượt VaR {bt.exceptions} lần, kỳ vọng khoảng {bt.expected_exceptions:.0f} "
-             f"lần. p-value Kupiec {num(bt.p_pof, 2)}, Christoffersen {num(bt.p_ind, 2)}."),
+             f"lần. p-value Kupiec {num(bt.p_pof, 2)}, Christoffersen {num(bt.p_ind, 2)}. {bt_result}"),
             "Kupiec (1995); Christoffersen (1998)",
             bt_action,
         ))

@@ -70,6 +70,43 @@ _CSS = """
   background-size: 140% 140%; animation: rise .5s ease both, drift 14s ease-in-out infinite alternate;
   box-shadow: 0 8px 28px var(--shadow);
 }
+/* Mũi tên giữa 3 bước ở trang chủ */
+.step-arrow { display: flex; justify-content: center; align-items: center; height: 100%; }
+.step-arrow .ms { font-size: 2.2rem; color: #f2b100; }
+/* Thanh tab của 5 trang kết quả */
+.st-key-result-tabs { background: var(--soft); border: 1px solid var(--border); border-radius: 999px;
+  padding: .3rem .5rem; margin: .2rem 0 1rem; }
+.st-key-result-tabs [data-testid="stPageLink"] a { justify-content: center; border-radius: 999px; padding: .35rem .6rem; }
+.st-key-result-tabs [data-testid="stPageLink"] a:hover { background: var(--tint-p); }
+.tab-active { display: flex; justify-content: center; align-items: center; gap: .4rem; border-radius: 999px;
+  padding: .45rem .6rem; font-weight: 700; color: #fff;
+  background: linear-gradient(90deg, #6d3fd9, #8a5cf0); box-shadow: 0 4px 12px var(--shadow-hover); }
+.tab-active .ms { font-size: 1.15rem; }
+/* Nút Trước / Tiếp ở cuối trang */
+.st-key-page-footer { border-top: 1px solid var(--border); margin-top: 2rem; padding-top: .9rem; }
+.st-key-page-footer [data-testid="stPageLink"] a { border: 1px solid var(--border); border-radius: 999px;
+  padding: .45rem 1rem; background: var(--card-bg); width: fit-content; }
+.st-key-page-footer [data-testid="stPageLink"] a:hover { border-color: #6d3fd9; background: var(--tint-p); }
+.st-key-page-footer-next { align-items: flex-end; }
+.st-key-page-footer-next [data-testid="stPageLink"] { display: flex; justify-content: flex-end; width: 100%; }
+.st-key-page-footer-next [data-testid="stPageLink"] a { margin-left: auto; flex-direction: row-reverse; gap: .4rem; }
+/* Khung thông báo "danh mục ví dụ": nổi bật, viền vàng gold bên trái */
+.st-key-example-banner { background: linear-gradient(100deg, var(--tint-g), var(--tint-p)); border: 1px solid var(--border);
+  border-left: 6px solid #f2b100; border-radius: 1rem; padding: 1rem 1.25rem; box-shadow: 0 6px 18px var(--shadow); }
+.example-title { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+.example-title .tag { display: inline-block; background: #f2b100; color: #1f1937; font-size: .72rem; font-weight: 800;
+  letter-spacing: .06em; border-radius: 999px; padding: .1rem .6rem; margin-right: .45rem; vertical-align: 2px; }
+.example-line { color: var(--muted); font-size: .9rem; margin-top: .2rem; }
+.example-line b { color: var(--text); }
+/* Bước khai báo: số thứ tự tròn */
+.step-head { display: flex; align-items: center; gap: .6rem; font-weight: 700; font-size: 1.1rem; color: var(--text);
+  margin: .4rem 0 .2rem; }
+.step-head .num { display: inline-flex; width: 1.9rem; height: 1.9rem; border-radius: 999px; align-items: center;
+  justify-content: center; background: var(--primary-color, #6d3fd9); color: #fff; font-size: .95rem; }
+.step-head .opt { font-weight: 500; font-size: .85rem; color: var(--muted); }
+/* Ô số trong bảng khai báo: bỏ nút +/- cho gọn, gõ số trực tiếp */
+.st-key-holdings [data-testid="stNumberInputStepUp"], .st-key-holdings [data-testid="stNumberInputStepDown"],
+.st-key-cashbox [data-testid="stNumberInputStepUp"], .st-key-cashbox [data-testid="stNumberInputStepDown"] { display: none; }
 .verdict-kicker { color: var(--muted); font-size: .85rem; font-weight: 600; letter-spacing: .02em; }
 .verdict-label { font-size: 2.2rem; font-weight: 800; color: var(--text); line-height: 1.15; margin: .35rem 0 .5rem 0; }
 .verdict-pill {

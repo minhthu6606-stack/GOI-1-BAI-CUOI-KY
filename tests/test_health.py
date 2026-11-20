@@ -98,3 +98,12 @@ def test_vnd_full_and_billion():
     assert vnd(500_000_000) == "500.000.000 đ"
     assert vnd(-52_415_000) == "-52.415.000 đ"
     assert vnd_billion(25_432_100_000_000) == "25.432 tỷ đ"
+
+
+def test_var_reliability_is_info_and_does_not_change_verdict(report):
+    """Độ tin cậy của VaR đánh giá công cụ đo, không đánh giá danh mục: luôn ở mức Thông tin."""
+    from src.finance.health import overall_verdict
+    check = next(c for c in report.checks if c.name.startswith("Độ tin cậy của VaR"))
+    assert check.status == INFO and "không tính vào kết luận chung" in check.threshold
+    without = [c for c in report.checks if c is not check]
+    assert overall_verdict(report.checks) == overall_verdict(without)

@@ -15,6 +15,8 @@ APP_DESCRIPTOR = "Khám sức khỏe danh mục cổ phiếu"     # mô tả ng�
 APP_GOAL = ("Bạn nhập những mã cổ phiếu đang có, ứng dụng chấm sức khỏe danh mục theo 4 câu hỏi: có đang dồn "
             "quá nhiều tiền vào một mã hay một ngành không, cần tiền gấp thì bán hết mất mấy ngày, danh mục lên "
             "xuống mạnh đến đâu so với thị trường, và một phiên giảm sàn có thể làm bạn mất bao nhiêu tiền")
+APP_PITCH = ("Nhập các mã bạn đang nắm, Vốn Ổn cho biết danh mục có dồn tiền vào một chỗ không, bán gấp mất mấy "
+             "ngày, lên xuống mạnh đến đâu và giảm sàn thì mất bao nhiêu")   # bản ngắn cho trang chủ
 APP_USERS = ("Nhà đầu tư cá nhân mới tham gia thị trường, đang nắm khoảng 3–10 mã cổ phiếu và muốn tự kiểm tra "
              "rủi ro trước khi quyết định mua thêm hay cơ cấu lại")
 

@@ -27,18 +27,23 @@ Tông tím - vàng gold, phông Montserrat. Mặc định giao diện sáng; m�
 chuyển sáng/tối. Mở ứng dụng là **Trang chủ** (giới thiệu, hình minh họa động, 4 điều được kiểm tra, 3 bước sử dụng,
 câu hỏi thường gặp). Đầu mỗi trang có dải giá chạy ngang: VN-Index, các mã trong danh mục và 10 cổ phiếu vốn hóa lớn
 (`TICKER_SYMBOLS` trong `src/config.py`), lấy giá đóng cửa phiên mới nhất trong kho.
-Thanh bên trái là menu: **Trang chủ**, **Danh mục của bạn**, **Tổng quan** (kết luận và 6 chỉ số chính), **Cảnh báo**,
-**Phân bổ**, **Rủi ro**, **Thanh khoản & giảm sàn**, **Thử điều chỉnh**, **Thị trường**, **Phương pháp & dữ liệu**.
+Thanh bên trái là menu, nhóm theo quy trình 3 bước: **Trang chủ**; **1 · Hồ sơ danh mục** (Nhập danh mục);
+**2 · Xem kết quả** (Tổng quan, Cảnh báo, Phân bổ, Rủi ro, Thanh khoản & giảm sàn; 5 trang này có thanh tab để chuyển
+nhanh); **3 · Phương án cải thiện** (Thử điều chỉnh); **Tham khảo** (Thị trường, Phương pháp & dữ liệu). Cuối mọi trang
+có nút **Trước / Tiếp** đi theo đúng thứ tự trên.
 
-Một lần dùng đi theo chu trình khám sức khỏe:
-1. **Khai báo** (trang Danh mục của bạn): chọn nhanh 1 trong 3 danh mục ví dụ (*Người mới bắt đầu*, *Dồn vào ngân
-   hàng*, *Đa dạng hơn*; mỗi danh mục khoảng 100 triệu đồng, giá thật từ SSI, số lượng giả định, làm tròn xuống theo lô
-   100 cổ phiếu) hoặc tự nhập từng mã. Tùy chọn: khai mức lỗ chịu được trong một phiên và trong một năm, khi đó VaR và
-   sụt giảm tối đa được so với chính mức này.
-2. **Xét nghiệm và chẩn đoán**: Tổng quan, Cảnh báo và các trang chi tiết.
-3. **Kê đơn**: mỗi cảnh báo có "Nên làm gì?"; trang **Thử điều chỉnh** cho kéo tỷ trọng từng mã và xem kết luận,
-   các chỉ số trước/sau ngay lập tức (mô phỏng, không phải khuyến nghị mua/bán), có thể áp dụng vào danh mục. Dưới menu là khung
-**Dữ liệu**: nguồn, phiên mới nhất, thời điểm tải, trạng thái kết nối và hai nút *Kiểm tra kết nối*, *Cập nhật dữ liệu*.
+Quy trình 3 bước:
+1. **Hồ sơ danh mục** (trang Nhập danh mục): (1) chọn danh mục ví dụ (*Người mới bắt đầu*, *Dồn vào ngân hàng*,
+   *Đa dạng hơn*; mỗi danh mục khoảng 100 triệu đồng, giá thật từ SSI, số lượng giả định, làm tròn xuống theo lô 100 cổ
+   phiếu) hoặc danh mục của tôi; (2) mỗi dòng chỉ cần mã và số lượng (giá vốn là tùy chọn); (3) không bắt buộc: mức lỗ
+   chịu được trong một phiên và trong một năm, khi đó VaR và sụt giảm tối đa được so với chính mức này. Nút
+   **Xem kết quả** lưu và chuyển sang Tổng quan. Khi dùng danh mục ví dụ, đầu trang Nhập danh mục và Tổng quan có khung
+   ghi rõ là ví dụ.
+2. **Xem kết quả**: Tổng quan, Cảnh báo và các trang chi tiết.
+3. **Phương án cải thiện**: mỗi cảnh báo có "Nên làm gì?"; trang **Thử điều chỉnh** cho kéo tỷ trọng từng mã và xem kết luận,
+   các chỉ số trước/sau ngay lập tức (mô phỏng, không phải khuyến nghị mua/bán), có thể áp dụng vào danh mục.
+
+Dưới menu là khung **Dữ liệu**: nguồn, phiên mới nhất, thời điểm tải, trạng thái kết nối và hai nút *Kiểm tra kết nối*, *Cập nhật dữ liệu*.
 Máy có API key và có kho `data/`: mở ứng dụng sau 15:00 ngày làm việc sẽ tự tải phiên mới (mỗi phiên một lần).
 
 ## Cài đặt (Windows, PowerShell)

@@ -61,6 +61,9 @@ def test_diversity_scale_dark_and_ticker():
     html = ticker_html([("VN-Index", 1736.89, -0.0061), ("FPT", 98500, 0.012), ("VCB", 60000, 0.0)], "Phiên 16/11/2026")
     assert "1.736,89" in html and "▼ 0,61%" in html and "▲ 1,20%" in html and "98.500" in html
     assert html.count("FPT") == 2          # nội dung nhân đôi để chạy vòng liền mạch
+    # mã VNM bắt đầu bằng "VN" nhưng là cổ phiếu: giá nguyên đồng, không có ",00"
+    vnm = ticker_html([("VNM", 51400, 0.0)], "Phiên 20/11/2026")
+    assert "51.400<" in vnm and "51.400,00" not in vnm
 
 
 def test_theme_css_and_script():

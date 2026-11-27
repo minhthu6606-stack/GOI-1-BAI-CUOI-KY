@@ -295,6 +295,9 @@ def _vn(value: float, digits: int) -> str:
     return f"{value:,.{digits}f}".replace(",", "_").replace(".", ",").replace("_", ".")
 
 
+INDEX_NAMES = {"VN-Index"}  # tên chỉ số hiển thị trên dải giá (các tên khác là mã cổ phiếu)
+
+
 def ticker_html(items: list[tuple[str, float, float]], session_label: str) -> str:
     """Dải giá chạy ngang. items: (tên, giá/điểm, % thay đổi so với phiên trước, dạng 0.012 = 1,2%)."""
     parts = []
@@ -305,7 +308,9 @@ def ticker_html(items: list[tuple[str, float, float]], session_label: str) -> st
             kind = "up" if change > 0 else ("down" if change < 0 else "flat")
             arrow = {"up": "▲", "down": "▼", "flat": "■"}[kind]
             tag = f'<span class="tag {kind}">{arrow} {_vn(abs(change) * 100, 2)}%</span>'
-        digits = 2 if name.upper().startswith("VN") else 0
+        # chỉ số có 2 chữ số thập phân; giá cổ phiếu là số nguyên đồng.
+        # Không dùng startswith("VN") vì mã cổ phiếu VNM cũng bắt đầu bằng "VN".
+        digits = 2 if name in INDEX_NAMES else 0
         parts.append(f'<span class="tick"><b>{escape(name)}</b>{_vn(value, digits)}{tag}</span>')
     head = f'<span class="tick-label">{escape(session_label)}</span>'
     track = head + "".join(parts)

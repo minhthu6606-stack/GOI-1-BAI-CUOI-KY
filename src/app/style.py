@@ -76,9 +76,14 @@ _CSS = """
 /* Thanh tab của 5 trang kết quả */
 .st-key-result-tabs { background: var(--soft); border: 1px solid var(--border); border-radius: 999px;
   padding: .3rem .5rem; margin: .2rem 0 1rem; }
-.st-key-result-tabs [data-testid="stPageLink"] a { justify-content: center; border-radius: 999px; padding: .35rem .6rem; }
+/* Mọi tab (kể cả tab đang xem) chiếm trọn ô cột và căn giữa chữ, cùng chiều cao */
+.st-key-result-tabs [data-testid="stColumn"] [data-testid="stElementContainer"],
+.st-key-result-tabs [data-testid="stPageLink"], .st-key-result-tabs [data-testid="stPageLink"] > div { width: 100% !important; }
+.st-key-result-tabs [data-testid="stPageLink"] a { display: flex; width: 100%; max-width: none; justify-content: center;
+  align-items: center; border-radius: 999px; padding: .45rem .6rem; margin: 0; }
+.st-key-result-tabs [data-testid="stPageLink"] a p { text-align: center; }
 .st-key-result-tabs [data-testid="stPageLink"] a:hover { background: var(--tint-p); }
-.tab-active { display: flex; justify-content: center; align-items: center; gap: .4rem; border-radius: 999px;
+.tab-active { display: flex; width: 100%; justify-content: center; align-items: center; gap: .4rem; border-radius: 999px;
   padding: .45rem .6rem; font-weight: 700; color: #fff;
   background: linear-gradient(90deg, #6d3fd9, #8a5cf0); box-shadow: 0 4px 12px var(--shadow-hover); }
 .tab-active .ms { font-size: 1.15rem; }

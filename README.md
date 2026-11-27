@@ -275,7 +275,7 @@ GOI-1-BAI-CUOI-KY/
 
 <div align="center">
 
-**Lê Thị Minh Thư** · MSSV K244141649 · Công nghệ Tài chính, Trường Đại học Kinh tế – Luật (UEL)
+**Lê Thị Minh Thư** · Công nghệ Tài chính, Trường Đại học Kinh tế – Luật (UEL)
 
 Đồ án cá nhân cuối kỳ · *Gói phần mềm ứng dụng cho tài chính 1* · 2026
 
